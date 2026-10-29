@@ -1,5 +1,5 @@
-// Browser fallback for a terminal tab: a parchment scroll explaining that
-// terminals need the desktop app, with copyable cwd and resume command.
+// Parchment notices in a terminal pane: the browser fallback (terminals need
+// the desktop app; copyable cwd + command) and "this session's history is gone".
 
 import { useEffect, useRef, useState } from 'react';
 import { manualCommand } from '../utils/terminalTabs';
@@ -9,7 +9,8 @@ interface TerminalNoticeProps {
   tab: TerminalTab;
 }
 
-async function copyText(value: string): Promise<boolean> {
+/** Clipboard write with an execCommand fallback (older shells, unfocused documents). */
+export async function copyText(value: string): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(value);
@@ -77,8 +78,38 @@ export default function TerminalNotice({ tab }: TerminalNoticeProps) {
         </p>
         <CopyRow label="Desktop app" value="bun run desktop" />
         <CopyRow label="Folder" value={tab.cwd} />
-        {cmd && <CopyRow label={tab.kind === 'resume' ? 'Resume' : 'Start'} value={cmd} />}
-        {!cmd && <p className="notice-foot">Open any shell in the folder above.</p>}
+        <CopyRow label={tab.kind === 'resume' ? 'Resume' : tab.kind === 'fork' ? 'Fork' : 'Start'} value={cmd} />
+      </div>
+    </div>
+  );
+}
+
+interface MissingHistoryNoticeProps {
+  tab: TerminalTab;
+  onNewSession: () => void;
+  onClose: () => void;
+}
+
+/** Shown instead of a dead `claude --resume` whose transcript isn't on disk. */
+export function MissingHistoryNotice({ tab, onNewSession, onClose }: MissingHistoryNoticeProps) {
+  return (
+    <div className="notice">
+      <div className="notice-scroll" role="alert">
+        <div className="notice-kicker">The scroll is blank</div>
+        <h3 className="notice-title">This session&apos;s history isn&apos;t on disk</h3>
+        <p className="notice-text">
+          <b>{tab.name}</b> can&apos;t be resumed — it may have been started without saving. Start a new session
+          here instead?
+        </p>
+        <CopyRow label="Folder" value={tab.cwd} />
+        <div className="notice-actions">
+          <button type="button" className="drawer-btn drawer-btn-primary" onClick={onNewSession}>
+            ✦ New session here
+          </button>
+          <button type="button" className="drawer-btn notice-btn-plain" onClick={onClose}>
+            Close tab
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -9,3 +9,4 @@ dist/
 desktop/node_modules/
 desktop/dist/
 .playwright-mcp/
+.remember/

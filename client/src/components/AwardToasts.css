@@ -1,0 +1,186 @@
+/* Award toasts — stacked under the backpack, rarity-framed, sparkle on entry. */
+
+.toasts {
+  /* Lives inside .app-village: drops appear over the map's top-right corner, not the app chrome. */
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  /* Above the village, tooltip and editor (≤ 5); below the rewards panel (8),
+     which flashes the awarded tile itself, and the top bar + popover (20). */
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  pointer-events: none;
+}
+
+.toast {
+  --rarity: var(--rarity-common);
+  --glow: transparent;
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 240px;
+  max-width: 320px;
+  padding: 7px 14px 7px 7px;
+  background: var(--bg-4);
+  border: 2px solid var(--rarity);
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 4px 0 0 var(--ink),
+    0 0 18px var(--glow);
+  cursor: pointer;
+  animation: toast-in var(--dur-slow) var(--ease-bounce);
+  transform-origin: top right;
+}
+
+.toast-uncommon {
+  --rarity: var(--rarity-uncommon);
+  --glow: rgba(74, 222, 128, 0.3);
+}
+
+.toast-rare {
+  --rarity: var(--rarity-rare);
+  --glow: rgba(96, 165, 250, 0.35);
+}
+
+.toast-epic {
+  --rarity: var(--rarity-epic);
+  --glow: var(--rarity-epic-glow);
+  box-shadow:
+    0 0 0 2px var(--gold-dark),
+    0 0 0 4px var(--ink),
+    0 4px 0 0 var(--ink),
+    0 0 22px var(--glow);
+}
+
+.toast-leave {
+  animation: toast-out var(--dur-base) ease-in forwards;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateX(12px) scale(0.96);
+  }
+}
+
+.toast-icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-1);
+  border: 2px solid var(--line-3);
+  box-shadow: var(--bevel-in);
+}
+
+.toast-epic .toast-icon {
+  border-color: var(--gold-dark);
+}
+
+.toast-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.toast-hero {
+  margin-left: auto;
+}
+
+.toast-title {
+  font-size: var(--fs-md);
+  font-weight: 800;
+  color: var(--text-0);
+  text-shadow: 1px 1px 0 var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toast-sub {
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toast-place {
+  color: var(--rarity);
+  font-weight: 700;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Two bursts of pixel sparks along the top and bottom edges. */
+.toast-sparkle {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.toast-sparkle::before,
+.toast-sparkle::after {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: var(--gold);
+  animation: sparkle 720ms ease-out forwards;
+}
+
+.toast-sparkle::before {
+  top: -7px;
+  left: 12px;
+  box-shadow:
+    44px -3px 0 var(--gold-hi),
+    96px 5px 0 var(--gold),
+    150px -5px 0 var(--gold-hi),
+    200px 2px 0 var(--gold);
+}
+
+.toast-sparkle::after {
+  bottom: -7px;
+  right: 16px;
+  box-shadow:
+    -36px 4px 0 var(--gold-hi),
+    -84px -3px 0 var(--gold),
+    -140px 5px 0 var(--gold-hi),
+    -190px -2px 0 var(--gold);
+  animation-delay: 90ms;
+}
+
+@keyframes sparkle {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.5);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.5) translateY(-10px);
+  }
+}

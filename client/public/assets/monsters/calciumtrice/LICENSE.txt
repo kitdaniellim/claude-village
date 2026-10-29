@@ -1,0 +1,34 @@
+Monster sprite sheets — attribution
+===================================
+
+All three sheets are by Calciumtrice (https://opengameart.org/users/calciumtrice),
+licensed Creative Commons Attribution 3.0 Unported (CC-BY 3.0)
+https://creativecommons.org/licenses/by/3.0/ — unmodified copies, renamed only.
+Fetched: 2026-10-15.
+
+eyeball.png   (256x96, 8x3 cells of 32 px: hover / dash / blink)
+  Original file: "eyeball spritesheet.png" from "Forest Monsters"
+  Source: https://opengameart.org/content/forest-monsters
+  Notice on the page: "Forest Monsters by Calciumtrice, usable under Creative
+  Commons Attribution 3.0 license."
+  (The user downloaded this one by hand; it is byte-identical to the OGA file —
+  md5 b9f741a0e3a702e872d77261659553cc.)
+
+goblin.png    (320x320, 10x10 cells of 32 px; rows 0-4 knife goblin, 5-9 hammer
+               goblin: idle / gesture / walk / attack / death)
+  Original file: "goblin spritesheet calciumtrice.png" from "Animated Goblins"
+  Source: https://opengameart.org/content/animated-goblins
+  Notice on the page: "Animated Goblins by Calciumtrice, usable under Creative
+  Commons Attribution 3.0 license."
+
+orc.png       (320x320, 10x10 cells of 32 px; rows 0-4 spear orc, 5-9 hooded orc:
+               idle / gesture / walk / attack / death)
+  Original file: "orc spritesheet calciumtrice.png" from "Animated Orcs"
+  Source: https://opengameart.org/content/animated-orcs
+  Notice on the page: "Animated Orcs by Calciumtrice, usable under Creative
+  Commons Attribution 3.0 license."
+
+Usage in RTS Agents: client/src/world/monsterSprite.ts + monsters.ts draw the
+error monsters beside heroes — eyeball = 1st error, knife goblin = 2nd, spear orc
+(as the "ogre") = 3rd and later. Credit line: "Monsters: Forest Monsters,
+Animated Goblins and Animated Orcs by Calciumtrice (CC-BY 3.0)".

@@ -214,6 +214,43 @@ export function drawParchment(
   }
 }
 
+/** Small parchment speech bubble whose tail tip sits at (cx, tipY) — screen space; `k` scales the padding. `\n` starts a new line. */
+export function drawSpeechBubble(ctx: CanvasRenderingContext2D, cx: number, tipY: number, text: string, font: string, k = 1): void {
+  ctx.font = font;
+  const lines = text.split('\n');
+  const tw = Math.ceil(Math.max(...lines.map((l) => ctx.measureText(l).width)));
+  const padX = Math.round(6 * k);
+  const lineH = Math.round(11 * k);
+  const h = Math.round(14 * k) + lineH * (lines.length - 1);
+  const tail = Math.max(3, Math.round(4 * k));
+  const w = tw + padX * 2;
+  const x = Math.round(cx - w / 2);
+  const y = Math.round(tipY - tail - h);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(x + 2, y + 3, w, h);
+  ctx.fillStyle = '#5d4524';
+  ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+  ctx.fillStyle = '#e9d8a6';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = '#c9b176';
+  ctx.fillRect(x + 1, y + 1, w - 2, 1);
+  // tail: border rows narrowing to a point, filled inside
+  for (let i = 0; i < tail; i++) {
+    const half = tail - i;
+    ctx.fillStyle = '#5d4524';
+    ctx.fillRect(cx - half, y + h + i, half * 2 + 1, 1);
+  }
+  for (let i = 0; i < tail - 1; i++) {
+    const half = tail - 1 - i;
+    ctx.fillStyle = '#e9d8a6';
+    ctx.fillRect(cx - half, y + h + i, half * 2 + 1, 1);
+  }
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = '#4a3318';
+  lines.forEach((line, i) => ctx.fillText(line, cx, y + Math.round(2.5 * k) + i * lineH));
+}
+
 /** Hanging cloth banner with a title (city names) — drawn in screen space. */
 export function drawBanner(
   ctx: CanvasRenderingContext2D,
@@ -256,24 +293,33 @@ export function drawBanner(
   ctx.fillText(text, cx, yy + 3);
 }
 
-/** Small wooden name plate (building names) — drawn in screen space. */
-export function drawPlate(ctx: CanvasRenderingContext2D, cx: number, y: number, text: string, font: string, hot = false): void {
+/** Plate height in screen px (callers use it for overlap tests). */
+export const PLATE_H = 12;
+
+/** Width of a plate for `text` in `font` (screen px). */
+export function plateWidth(ctx: CanvasRenderingContext2D, text: string, font: string): number {
+  ctx.font = font;
+  return Math.ceil(ctx.measureText(text).width) + 10;
+}
+
+/** Small wooden name plate (building names) — drawn in screen space. `dark` is the monster variant: scorched wood, pale text. */
+export function drawPlate(ctx: CanvasRenderingContext2D, cx: number, y: number, text: string, font: string, hot = false, dark = false): void {
   ctx.font = font;
   const tw = Math.ceil(ctx.measureText(text).width);
   const w = tw + 10;
-  const h = 12;
+  const h = PLATE_H;
   const x = Math.round(cx - w / 2);
   const yy = Math.round(y);
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.fillRect(x + 1, yy + 2, w, h);
-  ctx.fillStyle = hot ? '#8a6a2a' : '#4b3a22';
+  ctx.fillStyle = dark ? (hot ? '#7a2f28' : '#1a1410') : hot ? '#8a6a2a' : '#4b3a22';
   ctx.fillRect(x - 1, yy - 1, w + 2, h + 2);
-  ctx.fillStyle = hot ? '#e2c27a' : '#b58a4c';
+  ctx.fillStyle = dark ? (hot ? '#4a2422' : '#2f2620') : hot ? '#e2c27a' : '#b58a4c';
   ctx.fillRect(x, yy, w, h);
-  ctx.fillStyle = hot ? '#f1dc9f' : '#c99d5e';
+  ctx.fillStyle = dark ? (hot ? '#8a4a3a' : '#4b3a22') : hot ? '#f1dc9f' : '#c99d5e';
   ctx.fillRect(x, yy, w, 1);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillStyle = '#2b1d0e';
+  ctx.fillStyle = dark ? '#f4c2c2' : '#2b1d0e';
   ctx.fillText(text, cx, yy + 2);
 }

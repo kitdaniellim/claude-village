@@ -17,6 +17,9 @@ export const LAYOUT_STORAGE_KEY = 'rts-agents.layout.v2';
 
 export const DEFAULT_LAYOUT: LayoutMap = { ...DEFAULT_PLACE_TILES };
 
+/** Tavern default before the 18x12 footprint; a saved copy of it is re-centred to the new default. */
+const LEGACY_TAVERN_TILE: TilePos = { tx: 42, ty: 26 };
+
 function isTilePos(v: unknown): v is TilePos {
   if (typeof v !== 'object' || v === null) return false;
   const o = v as Record<string, unknown>;
@@ -33,6 +36,7 @@ export function loadLayout(): LayoutMap {
     if (typeof parsed !== 'object' || parsed === null) return layout;
     for (const [id, v] of Object.entries(parsed as Record<string, unknown>)) {
       if (!isTilePos(v)) continue;
+      if (id === 'tavern' && v.tx === LEGACY_TAVERN_TILE.tx && v.ty === LEGACY_TAVERN_TILE.ty) continue;
       layout[id] = {
         tx: Math.max(0, Math.min(TILES_X - 1, Math.round(v.tx))),
         ty: Math.max(0, Math.min(TILES_Y - 1, Math.round(v.ty))),

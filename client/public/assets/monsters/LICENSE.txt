@@ -1,0 +1,15 @@
+client/public/assets/monsters — packs and credit lines
+=====================================================
+
+calciumtrice/   Forest Monsters (eyeball), Animated Goblins, Animated Orcs — Calciumtrice,
+                CC-BY 3.0, https://opengameart.org/users/calciumtrice — see calciumtrice/LICENSE.txt.
+
+user-preview/   Pixel Art Animated Ogre / Goblin — user-supplied marketplace preview images (Downloads,
+                2026-10-15), original author/licence unknown — personal use only; verify licence before
+                distributing — see user-preview/LICENSE.txt.
+
+Credit lines for client/src/utils/credits.ts (⚙ Settings → About) and the README Credits table:
+
+  { name: 'Forest Monsters (eyeball)', author: 'Calciumtrice', license: 'CC-BY 3.0', url: 'https://opengameart.org/content/forest-monsters',  use: 'error monster, streak 1' }
+  { name: 'Animated Goblins',          author: 'Calciumtrice', license: 'CC-BY 3.0', url: 'https://opengameart.org/content/animated-goblins', use: 'error monster, streak 2' }
+  { name: 'Animated Orcs',             author: 'Calciumtrice', license: 'CC-BY 3.0', url: 'https://opengameart.org/content/animated-orcs',    use: 'error monster (ogre), streak 3+' }

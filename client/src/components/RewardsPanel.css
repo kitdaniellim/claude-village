@@ -1,0 +1,625 @@
+/* Backpack overlay — bevelled panel over the map holding the quest log (list or grid). */
+
+.rp {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 8;
+  width: min(560px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-4);
+  border: 2px solid var(--line-3);
+  box-shadow: var(--bevel-panel);
+  transform-origin: top right;
+  animation: rp-in var(--dur-base) var(--ease-out);
+}
+
+@keyframes rp-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+.rp-head {
+  flex: 0 0 auto;
+}
+
+.rp-head-icon {
+  color: var(--gold);
+}
+
+.rp-head-sub {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  white-space: nowrap;
+}
+
+/* List | Grid segmented toggle. */
+.rp-tabs {
+  margin-left: auto;
+  display: flex;
+  background: var(--bg-2);
+  border: 2px solid var(--line-3);
+  box-shadow: var(--bevel-in);
+}
+
+.rp-tab {
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  color: var(--text-3);
+  background: transparent;
+  border: 0;
+  border-right: 2px solid var(--line-2);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
+
+.rp-tab:last-child {
+  border-right: 0;
+}
+
+.rp-tab:hover {
+  color: var(--text-1);
+  background: var(--bg-5);
+}
+
+.rp-tab-on,
+.rp-tab-on:hover {
+  color: var(--bg-1);
+  background: var(--gold);
+}
+
+.rp-close {
+  width: 26px;
+  height: 24px;
+}
+
+/* ── Place chips ─────────────────────────────────────────────────────────── */
+
+.rp-chips {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg-3);
+  border-bottom: 2px solid var(--line-2);
+}
+
+.rp-chip-text {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Place chips carry their kind glyph; it inks dark on the gold active chip. */
+.ui-chip-on .rp-kind {
+  color: var(--bg-1);
+}
+
+/* "Newest first ↓" + "Showing 30 of 235". */
+.rp-sortbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 12px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  background: var(--bg-2);
+  border-bottom: 2px solid var(--line-2);
+}
+
+.rp-sort {
+  color: var(--gold-text);
+}
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+
+.rp-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 12px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-4) var(--bg-3);
+}
+
+.rp-kind {
+  flex: 0 0 auto;
+}
+
+.rp-kind-city {
+  color: var(--gold);
+}
+
+.rp-kind-dungeon {
+  color: var(--rarity-epic);
+}
+
+.rp-kind-lair {
+  color: var(--status-error);
+}
+
+.rp-kind-tavern {
+  color: var(--gold-text);
+}
+
+.rp-kind-wild {
+  color: var(--status-done);
+}
+
+.rp-kind-camp {
+  color: var(--text-3);
+}
+
+.rp-none {
+  padding: 12px 4px 6px;
+  font-size: var(--fs-sm);
+  font-style: italic;
+  color: var(--text-4);
+}
+
+/* Empty states */
+.rp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--text-4);
+}
+
+.rp-empty-icon {
+  color: var(--text-5);
+  margin-bottom: 4px;
+}
+
+.rp-empty-title {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.rp-empty-hint {
+  font-size: var(--fs-base);
+  line-height: 1.6;
+  max-width: 300px;
+}
+
+/* ── Paging: "Showing 30 of 235" + Load more ─────────────────────────────── */
+
+.rp-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0 4px;
+}
+
+.rp-more-count {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+
+.rp-more-count b {
+  color: var(--text-2);
+}
+
+.rp-more-btn {
+  min-width: 180px;
+  height: 28px;
+}
+
+/* ── Quest log: date groups ──────────────────────────────────────────────── */
+
+.bp-day {
+  margin-top: 2px;
+}
+
+.bp-day-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 -12px;
+  padding: 8px 12px 6px;
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  text-shadow: 1px 1px 0 var(--ink);
+  background: var(--bg-4);
+  border-bottom: 1px solid var(--line-2);
+}
+
+.bp-day-n {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-4);
+  text-shadow: none;
+}
+
+/* ── List rows ───────────────────────────────────────────────────────────── */
+
+.bp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bp-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 8px 6px;
+  border-top: 1px solid var(--line-1);
+  outline: none;
+  transition: background-color var(--dur-fast) ease;
+}
+
+.bp-row:first-child {
+  border-top: 0;
+}
+
+.bp-row:hover,
+.bp-row:focus-visible {
+  background: var(--bg-5);
+}
+
+.bp-row:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--gold-dark);
+}
+
+/* Item frame: the only place rarity shows — a colour, never a word. */
+.bp-icon,
+.bp-tile {
+  --rarity: var(--rarity-common);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-1);
+  border: 2px solid var(--rarity);
+  box-shadow: var(--bevel-in);
+}
+
+.bp-icon {
+  width: 40px;
+  height: 40px;
+}
+
+.bp-r-uncommon {
+  --rarity: var(--rarity-uncommon);
+}
+
+.bp-r-rare {
+  --rarity: var(--rarity-rare);
+}
+
+.bp-r-epic {
+  --rarity: var(--rarity-epic);
+}
+
+.bp-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.bp-summary {
+  font-size: var(--fs-base);
+  line-height: 1.45;
+  color: var(--text-1);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.bp-summary-none {
+  font-style: italic;
+  color: var(--text-4);
+}
+
+.bp-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.bp-hero,
+.bp-place {
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  background: none;
+  border: 0;
+}
+
+.bp-hero {
+  flex: 0 1 auto;
+  max-width: 55%;
+  font-weight: 700;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.bp-hero:disabled {
+  cursor: default;
+  color: var(--text-3);
+}
+
+.bp-hero:disabled .bp-hero-portrait {
+  opacity: 0.55;
+}
+
+.bp-hero:hover:not(:disabled) .bp-hero-name,
+.bp-place-link:hover .bp-place-text {
+  color: var(--gold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The 36 px tab portrait, halved for the meta line. */
+.bp-hero-portrait {
+  zoom: 0.5;
+}
+
+.bp-hero-name,
+.bp-place-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bp-place {
+  flex: 0 1 auto;
+}
+
+.bp-place-link {
+  cursor: pointer;
+}
+
+.bp-dot {
+  flex: 0 0 auto;
+  color: var(--text-5);
+}
+
+.bp-time {
+  padding-top: 1px;
+  font-size: var(--fs-sm);
+  color: var(--text-4);
+  white-space: nowrap;
+}
+
+/* A fresh award glows gold for a moment at the top of the log. */
+.bp-row-new {
+  animation: bp-new 1600ms ease-out;
+}
+
+@keyframes bp-new {
+  0% {
+    background-color: rgba(255, 217, 122, 0.28);
+    box-shadow: inset 3px 0 0 0 var(--gold);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: inset 3px 0 0 0 transparent;
+  }
+}
+
+/* ── Grid tiles ──────────────────────────────────────────────────────────── */
+
+.bp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 46px);
+  gap: 6px;
+  padding: 2px 0 6px;
+}
+
+.bp-tile {
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  cursor: default;
+  outline: none;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    filter var(--dur-fast) ease;
+}
+
+.bp-tile:focus-visible {
+  box-shadow: 0 0 0 2px var(--gold);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bp-tile:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.15);
+  }
+}
+
+/* ── Hover popover (parchment): the full resolution ──────────────────────── */
+
+.bp-pop {
+  position: fixed;
+  z-index: 70;
+  width: 340px;
+  padding: 9px 11px 9px;
+  font-size: var(--fs-base);
+  line-height: 1.4;
+  color: #3b2a14;
+  background: #e9d8a6;
+  border: 2px solid #5d4524;
+  box-shadow:
+    0 0 0 1px var(--ink),
+    3px 4px 0 0 rgba(0, 0, 0, 0.35);
+  animation: bp-pop-in var(--dur-fast) var(--ease-out);
+}
+
+@keyframes bp-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bp-pop-side {
+  animation-name: bp-pop-in-side;
+}
+
+@keyframes bp-pop-in-side {
+  from {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.bp-pop-kicker {
+  margin-bottom: 4px;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #7a5e2e;
+}
+
+.bp-pop-text {
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 4px;
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  color: #2d2314;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  scrollbar-color: #8a6f3e transparent;
+}
+
+.bp-pop-text-none {
+  font-style: italic;
+  color: #6b5a3e;
+}
+
+.bp-pop-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px dashed #b89e66;
+}
+
+.bp-pop-id {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bp-pop-name {
+  font-size: var(--fs-md);
+  font-weight: 800;
+  color: #2d2314;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bp-pop-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-sm);
+  color: #5d4524;
+}
+
+/* Kind glyphs read on parchment in ink, not their map colours. */
+.bp-pop .rp-kind {
+  color: #5d4524;
+}
+
+.bp-pop-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 7px;
+  font-size: var(--fs-sm);
+  color: #5d4524;
+}
+
+.bp-pop-rel {
+  color: #7a6a4c;
+}
+
+.bp-pop-found {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-xs);
+  color: #8a7552;
+  white-space: nowrap;
+}
+
+/* A 32 px sprite shrunk to a 16 px mark beside the muted "found:" line. */
+.bp-pop-item {
+  zoom: 0.5;
+  opacity: 0.85;
+}

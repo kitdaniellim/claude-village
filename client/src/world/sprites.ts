@@ -236,7 +236,6 @@ export const DRAGON_PALETTE: Record<string, string> = {
 
 export const DRAGON = {
   headClosed: ['..HH....', '.GGGH...', 'GGEGG...', 'GGGGGG..', 'TGGGGGG.', '.GGGGGGG'],
-  headOpen: ['..HH....', '.GGGH...', 'GGEGG...', 'GGGGGG..', 'TTGGGGG.', '....GGGG', 'TTTGGGGG'],
   body: [
     '..GGGGGG..........',
     '.dGGGGGHGGGHGGGHG.',
@@ -250,17 +249,6 @@ export const DRAGON = {
     '...GGGG.GGGG.GGGG.',
   ],
   wingFolded: ['.....ww.....', '....wWWw....', '...wWWWWw...', '..wWWWWWWw..', '.wWWWWWWWWw.', 'wWWWWWWWWWWw', 'WWWWWWWWWWWW'],
-  wingSpread: [
-    '......ww........',
-    '....wwWWww......',
-    '...wWWWWWWw.....',
-    '..wWWWWWWWWw....',
-    '.wWWWWWWWWWWw...',
-    'wWWWWWWWWWWWWw..',
-    '.WWWWWWWWWWWWWw.',
-    '..WWWWWWWWWWWWWw',
-    '....WWWWWWWWWW..',
-  ],
 } as const;
 
 const dragonCache = new Map<string, HTMLCanvasElement>();

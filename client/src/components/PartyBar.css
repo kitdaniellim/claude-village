@@ -1,60 +1,72 @@
+/* Party panel — hero cards on the left; same header/bevel chrome as the rest. */
+
 .party {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: #141826;
-  border-right: 2px solid #2a3046;
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  background: var(--bg-2);
+  border-right: 2px solid var(--line-2);
+  box-shadow: 2px 0 0 0 var(--ink);
 }
 
 .party-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px 8px 12px;
-  border-bottom: 2px solid #2a3046;
-  background: #181d2e;
+  gap: var(--sp-2);
+  min-height: 36px;
+  padding: 0 var(--sp-2) 0 var(--sp-3);
+  border-bottom: 2px solid var(--line-2);
+  background: linear-gradient(180deg, var(--bg-3), var(--bg-2));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .party-title {
-  font-size: 11px;
+  font-size: var(--fs-base);
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #e7d9ad;
+  color: var(--gold-dim);
+  text-shadow: 1px 1px 0 var(--ink);
 }
 
 .party-count {
-  font-size: 10px;
-  color: #8e97b8;
-  background: #232a40;
-  border: 1px solid #343b58;
-  padding: 1px 7px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-3);
+  background: var(--bg-5);
+  border: 1px solid var(--line-3);
+  padding: 3px 7px;
 }
 
 .party-filter {
   flex: 1;
   min-width: 0;
   font: inherit;
-  font-size: 10px;
-  height: 22px;
-  padding: 0 7px;
-  color: #dde3f2;
-  background: #10131d;
-  border: 2px solid #2e364f;
+  font-size: var(--fs-sm);
+  height: 24px;
+  padding: 0 8px;
+  color: var(--text-1);
+  background: var(--bg-1);
+  border: 2px solid var(--line-2);
+  box-shadow: var(--bevel-in);
   outline: none;
-  transition: border-color 120ms ease;
+  transition: border-color var(--dur-fast) ease;
   -webkit-appearance: none;
   appearance: none;
 }
 
 .party-filter::placeholder {
-  color: #4f587a;
+  color: var(--text-5);
   letter-spacing: 0.04em;
 }
 
+.party-filter:hover {
+  border-color: var(--line-3);
+}
+
 .party-filter:focus {
-  border-color: #ffd97a;
+  border-color: var(--gold);
 }
 
 .party-filter::-webkit-search-cancel-button {
@@ -65,44 +77,44 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
 }
 
 .party-empty {
   margin-top: 24px;
   text-align: center;
-  font-size: 11px;
+  font-size: var(--fs-base);
   line-height: 1.7;
-  color: #6e7794;
+  color: var(--text-4);
 }
 
 /* ── Card ─────────────────────────────────────────────────────────────────── */
 
 .party-card {
+  position: relative;
   display: flex;
-  gap: 9px;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
   text-align: left;
   font: inherit;
-  padding: 8px;
-  background: #1b2133;
-  border: 2px solid #2e364f;
-  box-shadow: inset 0 0 0 1px #10131d;
+  padding: 5px 7px 5px 5px;
+  background: var(--bg-4);
+  border: 2px solid var(--line-2);
+  box-shadow: var(--bevel-in);
   cursor: pointer;
   color: inherit;
-  outline: none;
   transition:
-    border-color 120ms ease,
-    background-color 120ms ease,
-    transform 140ms var(--ease-out);
+    border-color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease,
+    transform var(--dur-base) var(--ease-out);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .party-card:hover {
-    border-color: #4a547a;
+    border-color: var(--line-4);
     background: #20273c;
   }
 }
@@ -113,41 +125,50 @@
 }
 
 .party-card:focus-visible {
-  border-color: #ffd97a;
+  outline-offset: 0;
+}
+
+/* Squire: frame in the hero's colour with a dashed inner edge (set --hero inline). */
+.party-card-squire,
+.party-card-squire:hover {
+  border-color: var(--hero);
+}
+
+.party-card-squire::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border: 1px dashed var(--hero);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Tucked under its parent card. */
+.party-card-nested {
+  margin-left: 10px;
 }
 
 .party-card-selected,
 .party-card-selected:hover {
-  border-color: #ffd97a;
-  background: #232a40;
+  border-color: var(--gold);
+  background: var(--bg-5);
   box-shadow:
-    inset 0 0 0 1px #10131d,
-    0 0 0 1px rgba(255, 217, 122, 0.25);
+    var(--bevel-in),
+    0 0 0 1px var(--gold-glow),
+    0 0 12px rgba(255, 217, 122, 0.12);
 }
 
-.party-avatar {
-  flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
-  margin-top: 1px;
-  border: 2px solid #0b0d14;
-  box-shadow: 0 0 0 1px #3c4566;
-  position: relative;
-  image-rendering: pixelated;
+/* Portrait + title block; short text centres against the 68 px face. */
+.party-top {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
 }
 
+/* 2x portrait (components/Portrait.tsx) — the frame colour is the hero's. */
 .party-card-selected .party-avatar {
-  box-shadow: 0 0 0 1px #ffd97a;
-}
-
-.party-avatar-face {
-  position: absolute;
-  top: 4px;
-  left: 3px;
-  width: 14px;
-  height: 7px;
-  background: #eab985;
-  box-shadow: 0 8px 0 -3px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 0 0 1px var(--gold);
 }
 
 .party-body {
@@ -155,38 +176,141 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
-.party-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+/* Epithet + name run inline and wrap at word edges; the name is never cut. */
+.party-hero {
   min-width: 0;
+  font-size: var(--fs-md);
+  line-height: 1.3;
+  overflow-wrap: break-word;
+}
+
+.party-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .party-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
   font-weight: 800;
-  color: #f2e6c0;
+  color: var(--text-0);
+}
+
+/* Monster chip for the last tool failure: dark plate, red edge, one-line text. */
+.party-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  max-width: 100%;
+  min-width: 0;
+  padding: 2px 5px 2px 4px;
+  font-size: var(--fs-xs);
+  line-height: 1.3;
+  color: var(--danger-text);
+  background: linear-gradient(180deg, rgba(74, 32, 48, 0.55), rgba(13, 16, 24, 0.85)), var(--bg-1);
+  border: 1px solid var(--danger-line);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 0 0 var(--ink);
+}
+
+.party-error-tool {
+  flex: 0 0 auto;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--status-error);
+  white-space: nowrap;
+}
+
+.party-error-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--danger-text);
+}
+
+/* "×N" — the error streak, when it is more than a one-off. */
+.party-error-n {
+  flex: 0 0 auto;
+  padding: 0 3px;
+  font-weight: 800;
+  color: var(--bg-1);
+  background: var(--status-error);
+  border: 1px solid var(--danger-line);
+}
+
+/* The AI's auto title under a Nameless hero. */
+.party-subtitle {
+  font-size: var(--fs-xs);
+  color: var(--text-4);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* "⚔ squire of X" — a link to the parent when it is in the party. */
+.party-squire-chip {
+  align-self: flex-start;
+  max-width: 100%;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+  color: var(--text-3);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px dashed var(--line-4);
+  padding: 3px 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.party-squire-chip-link {
+  cursor: pointer;
+  color: var(--gold-text);
+  border-color: var(--gold-dark);
+  transition:
+    color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease;
+}
+
+.party-squire-chip-link:hover {
+  color: var(--gold);
+  background: rgba(255, 217, 122, 0.08);
+}
+
 .party-badge {
   flex: 0 0 auto;
-  font-size: 8px;
+  font-size: var(--fs-2xs);
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #11141d;
-  background: #ffd97a;
-  border: 1px solid #8a6f2e;
-  padding: 1px 5px;
-  box-shadow: 0 1px 0 0 #0b0d14;
+  line-height: 1;
+  color: var(--bg-1);
+  background: var(--gold);
+  border: 1px solid var(--gold-dark);
+  padding: 2px 5px;
+  box-shadow: 0 1px 0 0 var(--ink);
+}
+
+/* Process gone — muted grey instead of the gold call-to-action. */
+.party-badge-offline {
+  color: var(--text-1);
+  background: #2a3040;
+  border-color: #4a5268;
+}
+
+/* A sub-agent is still out — teal, so it never reads as "your turn". */
+.party-badge-squire {
+  color: var(--bg-1);
+  background: var(--status-delegating);
+  border-color: var(--status-delegating-dark);
 }
 
 .party-sub {
@@ -194,21 +318,15 @@
   align-items: baseline;
   gap: 4px;
   min-width: 0;
-  font-size: 10px;
-  color: #8e97b8;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
   white-space: nowrap;
   overflow: hidden;
 }
 
-.party-shortid {
-  flex: 0 0 auto;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
 .party-sep {
   flex: 0 0 auto;
-  color: #4f587a;
+  color: var(--text-5);
 }
 
 .party-place {
@@ -216,75 +334,91 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #aab3d0;
+  color: var(--text-2);
 }
 
+/* Basis 0: the branch only takes what the place leaves over. */
 .party-branch {
-  flex: 0 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #c9a857;
+  color: var(--gold-text);
 }
 
 .party-flavor {
-  font-size: 10px;
+  font-size: var(--fs-sm);
   font-style: italic;
-  color: #a78bfa;
+  color: var(--text-flavor);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.party-detail {
-  font-size: 9px;
-  color: #8e97b8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  background: rgba(0, 0, 0, 0.22);
-  border: 1px solid #232a40;
-  padding: 2px 5px;
-}
-
+/* Pill · friendly activity ("⚒ Editing Foo.tsx", only while working) · time. */
 .party-foot {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-top: 1px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.party-activity {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.party-pill {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .party-pill {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 9px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   padding: 1px 6px 1px 4px;
-  border: 1px solid #343b58;
+  border: 1px solid var(--line-3);
   background: #161b2a;
 }
 
 .party-pill-thinking {
-  color: #a78bfa;
+  color: var(--status-thinking);
   border-color: #4c3f82;
 }
 .party-pill-running {
-  color: #60a5fa;
+  color: var(--status-running);
   border-color: #2f4f84;
 }
 .party-pill-done {
-  color: #4ade80;
+  color: var(--status-done);
   border-color: #2f5a3c;
 }
 .party-pill-idle {
-  color: #9ca3af;
+  color: var(--status-idle);
+  border-color: #3f3868;
 }
 .party-pill-error {
-  color: #f87171;
-  border-color: #6b2f2f;
+  color: var(--status-error);
+  border-color: var(--danger-line);
+}
+.party-pill-delegating {
+  color: var(--status-delegating);
+  border-color: var(--status-delegating-dark);
+}
+
+.party-pill-check {
+  font-weight: 800;
+  line-height: 1;
 }
 
 .party-dot {
@@ -294,7 +428,8 @@
 }
 
 .party-pill-running .party-dot,
-.party-pill-thinking .party-dot {
+.party-pill-thinking .party-dot,
+.party-pill-delegating .party-dot {
   animation: party-pulse 1.6s ease-in-out infinite;
 }
 
@@ -308,13 +443,48 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .party-dot {
-    animation: none !important;
-  }
+.party-when {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-4);
+  white-space: nowrap;
 }
 
-.party-when {
-  font-size: 9px;
-  color: #6e7794;
+/* ── "Create Party (New Session)" ─────────────────────────────────────────── */
+
+.party-create-row {
+  flex: 0 0 auto;
+  padding: 8px 6px 2px;
+}
+
+.party-create {
+  width: 100%;
+  height: 32px;
+  font-size: var(--fs-base);
+  letter-spacing: 0.06em;
+}
+
+.party-create-sub {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+/* Placeholder for a restored terminal's hero the server doesn't list yet: dimmed, dashed. */
+.party-card-sleeper {
+  border-style: dashed;
+  opacity: 0.78;
+}
+.party-card-sleeper.party-card-selected {
+  opacity: 1;
+}
+.party-card-sleeper .party-avatar {
+  filter: saturate(0.55) brightness(0.85);
+}
+.party-pill-sleeper {
+  color: var(--status-idle);
+  border-color: #3f3868;
+}
+.party-card-sleeper .party-flavor {
+  white-space: normal;
 }

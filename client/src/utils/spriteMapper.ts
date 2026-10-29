@@ -64,12 +64,24 @@ export function buildingInfo(id: BuildingId): BuildingInfo {
   return BUILDINGS.find((b) => b.id === id) ?? { id, name: id, caption: '' };
 }
 
+/** Mirrors the --status-* tokens in styles/global.css (idle shares the flavour-text purple). */
 export const STATUS_COLORS: Record<AgentStatus, string> = {
   thinking: '#a78bfa',
   running: '#60a5fa',
   done: '#4ade80',
-  idle: '#9ca3af',
+  idle: '#a78bfa',
   error: '#f87171',
+  delegating: '#2dd4bf',
+};
+
+/** Game-flavoured status words for pills/counts; `done` still reads as finished (✓ in the UI). */
+export const STATUS_LABELS: Record<AgentStatus, string> = {
+  thinking: 'Pondering',
+  running: 'Questing',
+  done: 'Awaiting quest',
+  idle: 'Idle',
+  error: 'Wounded',
+  delegating: 'Awaiting squire',
 };
 
 // ── Hero tunic colours (shared by Village sprites + PartyBar avatars) ────────

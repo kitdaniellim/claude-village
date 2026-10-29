@@ -6,9 +6,9 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: #141826;
-  border-left: 2px solid #2a3046;
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  background: var(--bg-2);
+  border-left: 2px solid var(--line-2);
+  box-shadow: -2px 0 0 0 var(--ink);
 }
 
 .drawer-closed {
@@ -59,37 +59,41 @@
   background: #ffd97a;
 }
 
-/* ── Chrome header ────────────────────────────────────────────────────────── */
+/* ── Top strip: tabs + the drawer's own controls ──────────────────────────── */
 
-.drawer-head {
+.drawer-strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  min-height: 40px;
+  background: var(--bg-1);
+  border-bottom: 2px solid var(--line-2);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.drawer-strip-tools {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px 8px 12px;
-  border-bottom: 2px solid #2a3046;
-  background: #181d2e;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-2);
+  border-left: 2px solid var(--line-2);
 }
 
 .drawer-title {
-  font-size: 11px;
+  align-self: center;
+  padding: 0 var(--sp-3);
+  font-size: var(--fs-base);
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #e7d9ad;
-}
-
-.drawer-count {
-  font-size: 10px;
-  color: #8e97b8;
-  background: #232a40;
-  border: 1px solid #343b58;
-  padding: 1px 7px;
+  color: var(--gold-dim);
+  text-shadow: 1px 1px 0 var(--ink);
 }
 
 .drawer-hint {
-  margin-left: auto;
-  font-size: 9px;
-  color: #6e7794;
+  font-size: var(--fs-xs);
+  color: var(--text-4);
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -97,50 +101,55 @@
 
 .drawer kbd {
   font: inherit;
-  font-size: 9px;
+  font-size: var(--fs-xs);
   line-height: 1;
-  padding: 2px 4px;
-  color: #aab3d0;
-  background: #1b2133;
-  border: 1px solid #3c4566;
-  box-shadow: 0 1px 0 0 #0b0d14;
+  padding: 2px 5px;
+  color: var(--text-1);
+  background: var(--bg-4);
+  border: 1px solid var(--line-3);
+  box-shadow: 0 1px 0 0 var(--ink);
 }
 
 .drawer-close {
   font: inherit;
-  font-size: 14px;
+  font-size: var(--fs-lg);
   line-height: 1;
   width: 24px;
-  height: 24px;
+  height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #aab3d0;
-  background: #1b2133;
-  border: 2px solid #343b58;
+  color: var(--text-3);
+  background: var(--bg-5);
+  border: 2px solid var(--line-3);
+  box-shadow: var(--bevel-raised);
   cursor: pointer;
-  transition: transform 120ms var(--ease-out), background-color 120ms ease;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) ease,
+    color var(--dur-fast) ease;
 }
 
 .drawer-close:hover {
-  background: #232a40;
-  color: #f2e6c0;
+  background: var(--bg-6);
+  border-color: var(--line-4);
+  color: var(--text-0);
 }
 
 .drawer-close:active {
-  transform: scale(0.94);
+  transform: translateY(1px);
+  box-shadow: var(--bevel-pressed);
 }
 
 /* ── Tab strip ────────────────────────────────────────────────────────────── */
 
 .drawer-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: stretch;
   overflow-x: auto;
   overflow-y: hidden;
-  min-height: 30px;
-  background: #10131d;
-  border-bottom: 2px solid #2a3046;
   scrollbar-width: thin;
 }
 
@@ -148,18 +157,13 @@
   height: 6px;
 }
 
-.drawer-tabs:empty {
-  min-height: 0;
-  border-bottom: 0;
-}
-
 .drawer-tab {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 200px;
-  padding: 0 6px 0 10px;
+  max-width: 220px;
+  padding: 1px 6px 1px 8px;
   font-size: 11px;
   color: #8e97b8;
   background: #141826;
@@ -231,135 +235,245 @@
   color: #ffd97a;
 }
 
-/* ── Session header + actions ─────────────────────────────────────────────── */
+/* ── Session header: one tidy row (name place · cwd status | actions), never wraps ── */
 
 .drawer-session {
-  padding: 8px 12px 9px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 5px 10px;
   border-bottom: 2px solid #232a40;
   background: #161b2a;
 }
 
-.drawer-session-main {
+/* Takes what the actions leave; its parts ellipsize (cwd first, then place, then name). */
+.drawer-session-info {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 0;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
-.drawer-session-dot {
-  flex: 0 0 auto;
-  width: 9px;
-  height: 9px;
-  border: 1px solid rgba(0, 0, 0, 0.45);
-}
-
+/* Priorities: the name stays whole (up to 34%); the cwd gives way first (shrink 20), then the place. */
 .drawer-session-name {
-  font-size: 12px;
-  font-weight: 700;
-  color: #f2e6c0;
+  flex: 0 0 auto;
+  max-width: 34%;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
+  font-size: var(--fs-md);
+  font-weight: 800;
+  color: var(--text-0);
+  text-shadow: 1px 1px 0 var(--ink);
 }
 
-.drawer-session-id {
-  flex: 0 0 auto;
-  font-size: 10px;
+.drawer-session-place {
+  flex: 0 1 auto;
+  min-width: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fs-sm);
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #8e97b8;
-  padding: 0 5px;
-  border: 1px solid #343b58;
-  background: rgba(0, 0, 0, 0.25);
+  color: var(--text-2);
+}
+
+.drawer-sep {
+  flex: 0 0 auto;
+  color: var(--text-5);
+}
+
+.drawer-session-cwd {
+  flex: 0 20 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fs-sm);
+  color: var(--text-4);
+}
+
+.drawer-session-info .party-pill {
+  flex: 0 0 auto;
 }
 
 .drawer-session-kind {
   flex: 0 0 auto;
-  margin-left: auto;
-  font-size: 9px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #6e7794;
-}
-
-.drawer-session-cwd {
-  margin-top: 3px;
-  font-size: 10px;
-  color: #8e97b8;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  direction: rtl;
-  text-align: left;
+  color: var(--text-4);
 }
 
 .drawer-actions {
+  flex: 0 0 auto;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+}
+
+.drawer-session .drawer-btn {
+  padding: 5px 8px;
+}
+
+.drawer-session .drawer-btn-icon {
+  padding: 4px 7px;
+  font-size: var(--fs-md);
+}
+
+/* "(Fork)" after Fetch Squire — the explanation, not the call to action. */
+.drawer-btn-muted {
+  font-weight: 400;
+  opacity: 0.6;
 }
 
 /* ── Buttons (pixel chunky) ───────────────────────────────────────────────── */
 
 .drawer-btn {
   font: inherit;
-  font-size: 10px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   letter-spacing: 0.04em;
   line-height: 1;
   padding: 6px 9px;
-  color: #dde3f2;
-  background: #232a40;
-  border: 2px solid #3c4566;
-  box-shadow: 0 2px 0 0 #0b0d14;
+  color: var(--text-1);
+  background: var(--bg-5);
+  border: 2px solid var(--line-3);
+  box-shadow: var(--bevel-raised);
   cursor: pointer;
   white-space: nowrap;
-  transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), background-color 120ms ease, border-color 120ms ease;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
 }
 
 .drawer-btn:hover {
-  background: #2c3450;
-  border-color: #4a547a;
+  background: var(--bg-6);
+  border-color: var(--line-4);
+  color: var(--text-0);
 }
 
-.drawer-btn:active {
-  transform: translateY(1px) scale(0.98);
-  box-shadow: 0 1px 0 0 #0b0d14;
+.drawer-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: var(--bevel-pressed);
+}
+
+.drawer-btn:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .drawer-btn-primary {
-  color: #11141d;
-  background: #ffd97a;
-  border-color: #8a6f2e;
+  color: var(--bg-1);
+  background: var(--gold);
+  border-color: var(--gold-dark);
 }
 
 .drawer-btn-primary:hover {
-  background: #ffe49a;
-  border-color: #8a6f2e;
+  color: var(--bg-1);
+  background: var(--gold-hi);
+  border-color: var(--gold-dark);
 }
 
 .drawer-btn-danger {
-  color: #f8a7a7;
-  border-color: #6b2f2f;
-  margin-left: auto;
+  color: var(--danger-text);
+  border-color: var(--danger-line);
 }
 
 .drawer-btn-danger:hover {
-  background: #4a2030;
+  color: var(--danger-text);
+  background: var(--danger-bg);
   border-color: #8a3f3f;
+}
+
+/* Fetch Squire — teal like the squire badge, so it reads as "send a helper". */
+.drawer-btn-squire {
+  color: var(--status-delegating);
+  border-color: var(--status-delegating-dark);
+}
+
+.drawer-btn-squire:hover {
+  color: var(--status-delegating);
+  border-color: var(--status-delegating);
 }
 
 .drawer-btn-ghost {
   background: transparent;
   box-shadow: none;
-  border-color: #2e364f;
-  color: #8e97b8;
+  border-color: var(--line-2);
+  color: var(--text-3);
+}
+
+/* ── "Also open elsewhere" strip under the session header ─────────────────── */
+
+.drawer-warn {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 5px var(--sp-3);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  color: var(--gold);
+  background: rgba(255, 217, 122, 0.08);
+  border-bottom: 2px solid rgba(255, 217, 122, 0.35);
+}
+
+.drawer-warn-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.drawer-warn-go {
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 7px;
+  color: var(--gold);
+  background: transparent;
+  border: 1px solid rgba(255, 217, 122, 0.45);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.drawer-warn-go:hover:not(:disabled) {
+  background: rgba(255, 217, 122, 0.12);
+}
+
+.drawer-warn-x {
+  font: inherit;
+  font-size: var(--fs-md);
+  line-height: 1;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold-text);
+  background: transparent;
+  border: 1px solid rgba(255, 217, 122, 0.35);
+  cursor: pointer;
+}
+
+.drawer-warn-x:hover {
+  color: var(--gold);
+  border-color: var(--gold);
 }
 
 .drawer-btn-ghost:hover {
-  color: #dde3f2;
+  background: transparent;
+  color: var(--text-1);
+}
+
+.drawer-btn-ghost:active {
+  transform: none;
+  box-shadow: none;
 }
 
 /* ── Body / panes ─────────────────────────────────────────────────────────── */
@@ -390,39 +504,121 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  background: #0d1018;
 }
 
 .xterm-host {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  cursor: text;
 }
 
+/* Padding lives on .xterm itself: FitAddon subtracts it, so the last row/column is never clipped. */
 .xterm-host .xterm {
+  box-sizing: border-box;
   height: 100%;
-  padding: 6px 4px 6px 8px;
+  padding: 10px 6px 10px 12px;
   -webkit-font-smoothing: antialiased;
 }
 
-.xterm-exit {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  background: #1d2233;
-  border-top: 2px solid #3c4566;
-  box-shadow: 0 -4px 0 0 rgba(0, 0, 0, 0.35);
+/* Themed scrollbar (FitAddon measures its width, so cols stay exact). */
+.xterm-host .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-4) transparent;
 }
 
-.xterm-exit-text {
-  font-size: 11px;
+.xterm-host .xterm-viewport::-webkit-scrollbar {
+  width: 10px;
+}
+
+.xterm-host .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.xterm-host .xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--line-3);
+  border: 2px solid #0d1018;
+}
+
+.xterm-host .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--line-5);
+}
+
+/* ── Process ended: dim the stale log, card on top ───────────────────────── */
+
+.xterm-wrap-ended .xterm-host {
+  opacity: 0.32;
+  filter: grayscale(0.7);
+  pointer-events: none;
+  transition:
+    opacity var(--dur-slow) ease,
+    filter var(--dur-slow) ease;
+}
+
+.xterm-ended {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: radial-gradient(ellipse at center, rgba(13, 16, 24, 0.55), rgba(13, 16, 24, 0.85));
+  animation: xterm-ended-in var(--dur-slow) var(--ease-out);
+}
+
+@keyframes xterm-ended-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.xterm-ended-card {
+  width: min(360px, 100%);
+  padding: 16px 18px 14px;
+  text-align: center;
+  background: var(--bg-4);
+  border: 2px solid var(--line-4);
+  box-shadow: var(--bevel-panel);
+}
+
+.xterm-ended-kicker {
+  font-size: var(--fs-xs);
   font-weight: 700;
-  color: #f8a7a7;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold-text);
+}
+
+.xterm-ended-title {
+  margin-top: 6px;
+  font-size: var(--fs-xl);
+  font-weight: 800;
+  color: var(--text-0);
+  text-shadow: 1px 1px 0 var(--ink);
+}
+
+.xterm-ended-code {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--danger-text);
+}
+
+.xterm-ended-hint {
+  margin: 6px 0 12px;
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
+.xterm-ended-btns {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
 }
 
 /* ── Empty state ──────────────────────────────────────────────────────────── */
@@ -743,4 +939,335 @@
 
 .drawer-chooser-back {
   margin-top: 16px;
+}
+
+/* ── "Running in another terminal" card ───────────────────────────────────── */
+
+.live-card-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 16px;
+}
+
+.live-card {
+  max-width: 440px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 14px;
+  background: var(--bg-4);
+  border: 2px solid var(--line-3);
+  box-shadow: var(--bevel-in), 0 4px 0 0 var(--ink);
+  animation: notice-in 180ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-card {
+    animation: none;
+  }
+}
+
+.live-card-kicker {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.live-card-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.live-card-id {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.live-card-name {
+  font-size: var(--fs-lg);
+  line-height: 1.3;
+  color: var(--text-0);
+  overflow-wrap: break-word;
+}
+
+.live-card-name-main {
+  font-weight: 800;
+}
+
+.live-card-place {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+.live-card-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-card-when {
+  font-size: var(--fs-xs);
+  color: var(--text-4);
+}
+
+.live-card-flavor {
+  font-size: var(--fs-base);
+  font-style: italic;
+  color: var(--text-flavor);
+}
+
+.live-card-activity {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+.live-card-go {
+  align-self: stretch;
+  margin-top: 4px;
+  padding: 10px 12px;
+  font-size: var(--fs-md);
+}
+
+.live-card-note {
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--text-4);
+  text-align: center;
+}
+
+/* The escape hatch: quiet, with its cost spelled out next to it. */
+.live-card-alt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line-3);
+}
+
+.live-card-takeover {
+  flex: 0 0 auto;
+  font-size: var(--fs-xs);
+  padding: 5px 8px;
+}
+
+.live-card-warn {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--gold-text);
+}
+
+/* ── Toast (Go to terminal result) ───────────────────────────────────────── */
+
+.drawer-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: 15;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: calc(100% - 32px);
+  padding: 8px 12px;
+  background: var(--bg-5);
+  border: 2px solid var(--line-4);
+  box-shadow: var(--bevel-raised), 0 6px 16px rgba(0, 0, 0, 0.45);
+  animation: drawer-toast-in 200ms var(--ease-out);
+  pointer-events: none;
+}
+
+@keyframes drawer-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-toast {
+    animation: none;
+  }
+}
+
+.drawer-toast-ok {
+  border-color: #2f5a3c;
+}
+
+.drawer-toast-warn {
+  border-color: var(--gold-dark);
+}
+
+.drawer-toast-err {
+  border-color: var(--danger-line);
+}
+
+.drawer-toast-text {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: var(--text-0);
+  white-space: nowrap;
+}
+
+.drawer-toast-ok .drawer-toast-text {
+  color: var(--status-done);
+}
+
+.drawer-toast-warn .drawer-toast-text {
+  color: var(--gold);
+}
+
+.drawer-toast-err .drawer-toast-text {
+  color: var(--danger-text);
+}
+
+.drawer-toast-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Missing-history parchment actions ───────────────────────────────────── */
+
+.notice-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.notice-btn-plain {
+  color: #3b2f1e;
+  background: transparent;
+  border-color: #8a6f2e;
+  box-shadow: none;
+}
+
+.notice-btn-plain:hover {
+  color: #2d2314;
+  background: rgba(92, 74, 30, 0.12);
+  border-color: #5c4a1e;
+}
+
+/* ── Focus mode + header toggles ─────────────────────────────────────────── */
+
+.drawer-btn-on,
+.drawer-btn-on:hover {
+  color: var(--bg-1);
+  background: var(--gold);
+  border-color: var(--gold-dark);
+}
+
+/* ── Create Party: every place, each with its repos ──────────────────────── */
+
+.drawer-chooser-tagline code {
+  font-size: 0.95em;
+  color: var(--gold-text);
+}
+
+.drawer-chooser-place {
+  margin-top: 14px;
+}
+
+.drawer-chooser-place-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: var(--fs-md);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  text-shadow: 1px 1px 0 var(--ink);
+}
+
+.drawer-chooser-place-tag {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--text-4);
+  text-shadow: none;
+}
+
+/* ── Restored after a restart: tab marker + the not-yet-started pane ───────── */
+
+.drawer-tab-restored {
+  flex: 0 0 auto;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 0 4px;
+  color: var(--gold);
+  border: 1px solid var(--line-3);
+  background: var(--bg-3);
+  white-space: nowrap;
+}
+
+.drawer-sleeping {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 16px;
+  overflow-y: auto;
+}
+
+.drawer-sleeping-card {
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 18px;
+  text-align: center;
+  background: var(--bg-4);
+  border: 2px dashed var(--line-3);
+  box-shadow: var(--bevel-in), 0 4px 0 0 var(--ink);
+}
+
+.drawer-sleeping-glyph {
+  font-size: 26px;
+  color: var(--gold);
+}
+
+.drawer-sleeping-kicker {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.drawer-sleeping-title {
+  font-weight: 800;
+  color: var(--text-0);
+}
+
+.drawer-sleeping-cwd {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  margin-bottom: 4px;
 }

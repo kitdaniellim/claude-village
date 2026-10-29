@@ -9,6 +9,10 @@ import type { AgentsResponse, ServerMessage } from './types';
 import { BROADCAST_THROTTLE_MS } from './types';
 import { AgentStore } from './state';
 import { Watcher } from './watcher';
+import { LiveSessions } from './sessions';
+import { Rewards } from './rewards';
+import { SquireScanner } from './squires';
+import { Rally } from './rally';
 
 // ── env ──────────────────────────────────────────────────────────────────────
 
@@ -56,7 +60,44 @@ const CORS_HEADERS: Record<string, string> = {
 
 const store = new AgentStore();
 const watcher = new Watcher(store);
+// Live processes first so the initial scan tails every running session's log, however old.
+const live = new LiveSessions(
+  () => watcher.getClaudeDirs(),
+  (sessions) => {
+    watcher.setLiveSessions(sessions.map((s) => s.sessionId));
+    store.applyLive(sessions);
+  }
+);
+const rewards = new Rewards();
+// Reads the last run's roster now, before the first save overwrites it.
+const rally = new Rally(() => store.getAgents());
+
+/** `<claudeDir>/projects/<slug>/<sessionId>.jsonl`, wherever it lives (old sessions aren't tracked). */
+function findTranscript(sessionId: string): string | null {
+  const tracked = watcher.getSessionPath(sessionId);
+  if (tracked) return tracked;
+  for (const dir of watcher.getClaudeDirs()) {
+    const projects = path.join(dir, 'projects');
+    let slugs: string[];
+    try {
+      slugs = fs.readdirSync(projects);
+    } catch {
+      continue;
+    }
+    for (const slug of slugs) {
+      const file = path.join(projects, slug, `${sessionId}.jsonl`);
+      if (fs.existsSync(file)) return file;
+    }
+  }
+  return null;
+}
+const squires = new SquireScanner(store, (id) => watcher.getSessionPath(id));
 watcher.start(); // synchronous initial scan → banner counts below are real
+live.start();
+rally.start(); // after the first live scan, so sessions still running aren't counted as cut off
+squires.start();
+// Repair old quest-log entries saved without a summary (once per start, off the startup path).
+setTimeout(() => rewards.backfill(findTranscript), 2_000);
 
 // ── http + websocket ─────────────────────────────────────────────────────────
 
@@ -71,6 +112,7 @@ function snapshotMessage(): ServerMessage {
     events: store.getEvents(),
     claudeDirs: watcher.getClaudeDirs(),
     serverTime: Date.now(),
+    rewards: rewards.getState(),
   };
 }
 
@@ -96,8 +138,21 @@ const server = Bun.serve({
         events: store.getEvents(),
         claudeDirs: watcher.getClaudeDirs(),
         serverTime: Date.now(),
+        rewards: rewards.getState(),
       };
       return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      });
+    }
+    if (url.pathname === '/api/rally') {
+      return new Response(JSON.stringify(rally.getState()), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      });
+    }
+    if (url.pathname === '/api/rewards') {
+      return new Response(JSON.stringify(rewards.getState()), {
         status: 200,
         headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
       });
@@ -137,8 +192,13 @@ function publish(message: ServerMessage): void {
 
 let agentsTimer: ReturnType<typeof setTimeout> | null = null;
 
+rewards.onChange((state, award) => publish({ type: 'rewards', rewards: state, award }));
+
 store.subscribe((agentsChanged, event) => {
-  if (event) publish({ type: 'event', event });
+  if (event) {
+    publish({ type: 'event', event });
+    rewards.onEvent(event, store.getAgent(event.sessionId));
+  }
   if (agentsChanged && agentsTimer === null) {
     // Coalesce full-list broadcasts to at most one per BROADCAST_THROTTLE_MS.
     agentsTimer = setTimeout(() => {
@@ -169,8 +229,12 @@ function shutdown(signal: string): void {
       // socket already gone
     }
   }
+  squires.stop();
+  rally.stop();
+  live.stop();
   watcher.stop();
   store.stop();
+  rewards.stop();
   server.stop(true);
   process.exit(0);
 }
@@ -187,7 +251,8 @@ console.log(
 );
 console.log(
   `[rts-agents] tracking ${watcher.getTrackedFileCount()} session file(s), ` +
-    `${store.getAgents().length} active session(s)`
+    `${store.getAgents().length} active session(s), ` +
+    `${store.getAgents().filter((a) => a.alive).length} live process(es)`
 );
 if (LAN) {
   console.log('[rts-agents] LAN mode — reachable at:');

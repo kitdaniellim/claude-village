@@ -1,0 +1,21 @@
+ocal-swords/ — sword-ocal_20230219 (user-supplied pack, Downloads, 2026-10-15)
+===========================================================================
+
+Files:   sword-OCAL.png (160x96 sheet), 32x32/*.png (one sword per file), sword-OCAL.txt (source list)
+Author:  openclipart.org contributors (pixel conversions as packed in sword-ocal_20230219)
+Licence: public domain — openclipart.org releases all clipart under CC0 1.0 / Public Domain
+         (https://creativecommons.org/publicdomain/zero/1.0/). No attribution required; credited anyway.
+
+Per-sword sources (from sword-OCAL.txt):
+  long_sword_01      https://openclipart.org/detail/22181
+  medieval_sword_01  https://openclipart.org/detail/169233
+  gladius_01         https://openclipart.org/detail/23530
+  gladius_02         https://openclipart.org/detail/230853
+  scimitar_01        https://openclipart.org/detail/4292
+  scimitar_02        https://openclipart.org/detail/170823
+  tanto_01           https://openclipart.org/detail/139051
+  heavy_sword_01     https://openclipart.org/detail/193923
+  muramasa_01        https://openclipart.org/detail/139081
+
+Use: hero weapons (client/src/world/weaponSprite.ts). Every 32x32 sword is drawn diagonally,
+pommel bottom-left, tip top-right; the game rotates it per LPC frame and grips it at the hand.

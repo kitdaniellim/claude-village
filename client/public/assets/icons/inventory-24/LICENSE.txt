@@ -1,0 +1,26 @@
+Various inventory 24 pixel icon set (pixel_icons_by_oceansdream.png)
+======================================================================
+
+File:       pixel_icons_by_oceansdream.png (the author's sheet, unmodified; 144 x 144 px RGBA,
+            a 6 x 6 grid of 24 x 24 icons — only the brown leather bag at cell (0, 4),
+            pixel origin (0, 96), is drawn in-app)
+Asset:      "Various inventory 24 pixel icon set" — "Various 24x24px icons for inventory and such."
+Author:     OceansDream
+            http://oceansdream.deviantart.com/art/Pixel-Icons-available-for-use-121152370
+Submitted:  2009-06-06 to OpenGameArt by qubodup
+Source:     https://opengameart.org/content/various-inventory-24-pixel-icon-set
+License:    Dual-licensed on the page; this repo uses it under
+            Creative Commons Attribution 3.0 Unported (CC-BY 3.0)
+            https://creativecommons.org/licenses/by/3.0/
+            (also offered as CC-BY-SA 3.0 — https://creativecommons.org/licenses/by-sa/3.0/;
+            the page lists no extra attribution wording)
+Downloaded: 2026-10-15 via curl from
+            https://opengameart.org/sites/default/files/pixel_icons_by_oceansdream_2.png
+
+Usage in RTS Agents: components/PixelIcon.tsx (BagIcon) draws the bag cell as a CSS
+sprite for the top-bar backpack button and the Backpack panel header / tab. The
+"open" state is a CSS transform on the flap region of the same cell, not a second
+image. The file is used unmodified.
+
+Attribution (CC-BY 3.0): "Various inventory 24 pixel icon set" by OceansDream,
+licensed under CC-BY 3.0, https://opengameart.org/content/various-inventory-24-pixel-icon-set

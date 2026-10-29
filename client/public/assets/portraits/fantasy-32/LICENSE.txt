@@ -1,0 +1,33 @@
+32x32 Fantasy portrait set (portraits.png)
+==========================================
+
+File:       portraits.png (the author's combined sheet, unmodified; 175 x 146 px RGBA)
+Asset:      "32x32 Fantasy portrait set" — "Set of 14 32x32 fantasy portraits"
+Author:     CobraLad (https://opengameart.org/users/cobralad)
+            Signed on the sheet: "CobraLad Portrait set 2015  @BakaiVitaliy  Galuin@ukr.net"
+Source:     https://opengameart.org/content/32x32-fantasy-portrait-set
+License:    Creative Commons Attribution 3.0 Unported (CC-BY 3.0)
+            https://creativecommons.org/licenses/by/3.0/
+            (the page lists no extra attribution wording; an expanded paid set
+            exists at https://cobralad.itch.io/fantasy-portraits-32x32 — not used)
+Submitted:  2015-02-23 (OpenGameArt)
+Downloaded: 2026-10-14 via curl from
+            https://opengameart.org/sites/default/files/portraits.png
+            (the pack also ships fant_port.zip = the same 14 faces as 1p.png … 14p.png;
+            only the sheet is kept here)
+
+Sheet layout: five 32 x 32 cells per row with a 1 px gutter, grey background,
+the author's signature under row 3. Cell origins (x, y):
+  row 0 (y 7):  5, 38, 71, 104, 137  — bearded warrior, bald man, headband rogue,
+                                        circlet woman, orc
+  row 1 (y 40): 5, 38, 71, 104, 137  — old wizard, skull, stone brute,
+                                        red-haired woman, visored knight
+  row 2 (y 73): 5, 38 (y 72), 71      — grey-haired woman, hooded helm, bearded dwarf
+  row 2 cell 4 (104, 73) is the author's "?" placeholder and is never shown.
+
+Usage in RTS Agents: client/src/utils/portraits.ts maps each hero's LPC look
+to a few fitting faces and draws one cell as a CSS sprite (party cards,
+terminal tabs, journal and toast chips). The file is used unmodified.
+
+Attribution (CC-BY 3.0): "32x32 Fantasy portrait set" by CobraLad,
+licensed under CC-BY 3.0, https://opengameart.org/content/32x32-fantasy-portrait-set

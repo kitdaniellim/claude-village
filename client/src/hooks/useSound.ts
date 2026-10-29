@@ -50,7 +50,8 @@ export function useSound(
     for (const a of agents) {
       const was = prev.get(a.sessionId);
       if (was === undefined || was === a.status) continue;
-      if (a.status === 'done' && (was === 'running' || was === 'thinking')) {
+      // `delegating` → `done` is the real finish when squires were out.
+      if (a.status === 'done' && (was === 'running' || was === 'thinking' || was === 'delegating')) {
         // The session you're looking at gets the soft chime; others call louder.
         cues.push(a.sessionId === selectedRef.current ? 'turn_done' : 'needs_you');
       } else if (a.status === 'error') {

@@ -1,17 +1,25 @@
-// WebSocket client per PROTOCOL.md: receives snapshot/agents/event/meta/shutdown,
-// reconnects with exponential backoff (1s → 30s cap, ±20% jitter).
+// WebSocket client per PROTOCOL.md: receives snapshot/agents/event/meta/rewards/
+// shutdown, reconnects with exponential backoff (1s → 30s cap, ±20% jitter).
 
 import { useEffect, useState } from 'react';
 import type {
   ActivityEvent,
   AgentState,
   ConnectionStatus,
+  JournalEntry,
+  RewardsState,
   ServerMessage,
 } from '../types/agent';
 
 const MAX_EVENTS = 50;
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_CAP_MS = 30000;
+
+/** The most recent award with a nonce, so toasts fire exactly once per message. */
+export interface LastAward {
+  award: JournalEntry;
+  nonce: number;
+}
 
 export interface AgentSocket {
   agents: AgentState[];
@@ -21,17 +29,32 @@ export interface AgentSocket {
   /** serverTime − client Date.now() from the latest snapshot. Add to Date.now()
    *  when comparing against server-stamped timestamps (LAN devices may drift). */
   skewMs: number;
+  /** Null until the first snapshot (or on servers without rewards). */
+  rewards: RewardsState | null;
+  lastAward: LastAward | null;
+  /** A snapshot has arrived at least once, so `agents` is the real roster (not the empty start). */
+  synced: boolean;
 }
 
-function serverWsUrl(): string {
+function isRewardsState(v: unknown): v is RewardsState {
+  if (typeof v !== 'object' || v === null) return false;
+  const r = v as Partial<RewardsState>;
+  return Array.isArray(r.catalog) && Array.isArray(r.inventory) && Array.isArray(r.journal);
+}
+
+/** The server's http(s) origin, no trailing slash (REST calls; the socket swaps the scheme). */
+export function serverHttpUrl(): string {
   const fromEnv = import.meta.env.VITE_SERVER_URL;
   const base =
     typeof fromEnv === 'string' && fromEnv.length > 0
       ? fromEnv
       : `http://${location.hostname}:4444`;
-  // http → ws, https → wss (already-ws URLs pass through untouched).
-  const ws = base.replace(/^http/, 'ws');
-  return `${ws.replace(/\/+$/, '')}/ws`;
+  return base.replace(/^ws/, 'http').replace(/\/+$/, '');
+}
+
+function serverWsUrl(): string {
+  // http → ws, https → wss.
+  return `${serverHttpUrl().replace(/^http/, 'ws')}/ws`;
 }
 
 export function useAgentSocket(): AgentSocket {
@@ -40,6 +63,9 @@ export function useAgentSocket(): AgentSocket {
   const [claudeDirs, setClaudeDirs] = useState<string[]>([]);
   const [connection, setConnection] = useState<ConnectionStatus>('connecting');
   const [skewMs, setSkewMs] = useState(0);
+  const [rewards, setRewards] = useState<RewardsState | null>(null);
+  const [lastAward, setLastAward] = useState<LastAward | null>(null);
+  const [synced, setSynced] = useState(false);
 
   useEffect(() => {
     let disposed = false;
@@ -82,10 +108,21 @@ export function useAgentSocket(): AgentSocket {
           // hammered at ~1 Hz forever).
           attempt = 0;
           setAgents(msg.agents);
+          setSynced(true);
           setEvents(msg.events.slice(-MAX_EVENTS));
           setClaudeDirs(msg.claudeDirs);
           if (typeof msg.serverTime === 'number') setSkewMs(msg.serverTime - Date.now());
+          if (isRewardsState(msg.rewards)) setRewards(msg.rewards);
           break;
+        case 'rewards': {
+          if (!isRewardsState(msg.rewards)) break;
+          setRewards(msg.rewards);
+          const award = msg.award;
+          if (typeof award === 'object' && award !== null && typeof award.id === 'string') {
+            setLastAward((prev) => ({ award, nonce: (prev?.nonce ?? 0) + 1 }));
+          }
+          break;
+        }
         case 'agents':
           if (!Array.isArray(msg.agents)) break;
           setAgents(msg.agents);
@@ -163,5 +200,5 @@ export function useAgentSocket(): AgentSocket {
     };
   }, []);
 
-  return { agents, events, claudeDirs, connection, skewMs };
+  return { agents, events, claudeDirs, connection, skewMs, rewards, lastAward, synced };
 }

@@ -1,0 +1,22 @@
+RPG crafting material icons (nails.png)
+========================================
+
+Author:     BizmasterStudios
+Source:     https://opengameart.org/content/rpg-crafting-material-icons
+License:    CC-BY 4.0 — https://creativecommons.org/licenses/by/4.0/
+Submitted:  2017-09-20 (OpenGameArt)
+Downloaded: 2026-10-14 via curl from
+            https://opengameart.org/sites/default/files/nails.png
+
+Sheet: 128 x 128 px, 4 x 4 grid of 32 x 32 px icons, RGBA.
+  row 0: nails, wood plank, wooden rod, cloth
+  row 1: copper ore, iron ore, silver nugget, gold nugget
+  row 2: copper bar, iron bar, silver bar, gold bar
+  row 3: feather, dragon scale, gem, leather
+
+The file is used unmodified. RTS Agents maps its 28 crafting items onto these
+16 cells (some cells are reused with a CSS hue/brightness filter) — see
+client/src/utils/itemIcons.ts.
+
+Attribution (CC-BY 4.0): "RPG crafting material icons" by BizmasterStudios,
+licensed under CC-BY 4.0, https://opengameart.org/content/rpg-crafting-material-icons

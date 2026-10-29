@@ -1,0 +1,58 @@
+/* "Move into the village" under Create Party. */
+.move {
+  flex: 0 0 auto;
+  margin: 6px 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.move-btn {
+  width: 100%;
+  height: 28px;
+}
+
+.move-confirm {
+  padding: 6px 7px 7px;
+  background: var(--bg-3);
+  border: 2px solid var(--gold-dark);
+  box-shadow: var(--bevel-in);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.move-row {
+  display: flex;
+  gap: 6px;
+}
+
+.move-row .move-btn {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.move-note {
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+.move-waiting {
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.move-link {
+  font: inherit;
+  margin-left: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--gold-text);
+  text-decoration: underline;
+  cursor: pointer;
+}

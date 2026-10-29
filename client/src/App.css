@@ -1,15 +1,27 @@
+/* Shell grid: top bar / main / activity dock. The dock row follows the feed
+   mode (data-feed) so the village grows when it collapses or closes. */
+
 .app {
   height: 100vh;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) 160px;
-  background: #11141d;
-  color: #cfd6e6;
+  grid-template-rows: auto minmax(0, 1fr) var(--feed-h);
+  background: var(--bg-1);
+  color: var(--text-1);
+  transition: grid-template-rows var(--dur-slow) var(--ease-out);
+}
+
+.app[data-feed='collapsed'] {
+  grid-template-rows: auto minmax(0, 1fr) var(--feed-strip-h);
+}
+
+.app[data-feed='closed'] {
+  grid-template-rows: auto minmax(0, 1fr) 0;
 }
 
 /* Columns are set inline: party | village | (terminal drawer when open). */
 .app-main {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: var(--party-w) minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
@@ -19,4 +31,95 @@
   min-width: 0;
   min-height: 0;
   display: flex;
+}
+
+/* Soft inner vignette frames the map inside the chrome; never catches input. */
+.app-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 72px rgba(5, 7, 12, 0.42),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.app-main {
+  position: relative;
+}
+
+/* ── Terminal Focus mode: drawer fills the right, village shrinks under the party ── */
+
+.app-main-focus {
+  grid-template-rows: minmax(0, 1fr) 184px;
+}
+
+.app-main-focus > .party {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.app-main-focus > .app-village-preview {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.app-main-focus > .drawer {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.app-village-preview {
+  overflow: hidden;
+  border-top: 2px solid var(--line-3);
+  border-right: 2px solid var(--line-2);
+}
+
+/* The whole preview is one "exit focus" button; the map underneath stays live but inert. */
+.app-preview-exit {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: flex;
+  align-items: flex-end;
+  padding: 0;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  cursor: zoom-out;
+  box-shadow: inset 0 0 0 2px var(--ink);
+  transition: box-shadow var(--dur-fast) ease;
+}
+
+.app-preview-exit:hover,
+.app-preview-exit:focus-visible {
+  outline: none;
+  box-shadow:
+    inset 0 0 0 2px var(--gold),
+    inset 0 0 0 4px var(--ink);
+}
+
+.app-preview-label {
+  width: 100%;
+  padding: 4px 8px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--gold-dim);
+  background: linear-gradient(0deg, rgba(11, 13, 20, 0.92), rgba(11, 13, 20, 0.55));
+}
+
+/* Award toasts sit over the party, just above the preview, so they never cover the terminal. */
+.app-main-focus > .toasts {
+  top: auto;
+  right: auto;
+  left: 10px;
+  bottom: 196px;
+}
+
+.app-main-focus > .toasts .toast {
+  min-width: 0;
+  max-width: 240px;
 }

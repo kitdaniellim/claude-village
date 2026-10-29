@@ -1,6 +1,7 @@
 // node-pty terminal registry: spawns Claude Code or a shell, streams data/exit
 // through callbacks, tracks which renderer owns each pty, tears down on quit.
 
+import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as nodePty from 'node-pty';
@@ -34,11 +35,14 @@ export function spawnPty(
 ): string {
   const id = `pty-${++seq}-${Date.now().toString(36)}`;
   const cwd = isDir(opts.cwd) ? opts.cwd : os.homedir();
-  // Launched from inside a Claude Code session, the app inherits its "nested session" markers —
-  // strip them so terminals opened here are first-class sessions with transcripts on.
+  // Launched from inside a Claude Code session, the app inherits that session's env
+  // (CLAUDE_CODE_SESSION_ID would make a fresh claude adopt the parent's session!) —
+  // strip every CLAUDE* var except the config-dir override.
   const cleanEnv = (): NodeJS.ProcessEnv => {
     const env = { ...process.env };
-    for (const k of ['CLAUDECODE', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_ENTRYPOINT']) delete env[k];
+    for (const k of Object.keys(env)) {
+      if (k.startsWith('CLAUDE') && k !== 'CLAUDE_CONFIG_DIR') delete env[k];
+    }
     return env;
   };
   const pty = nodePty.spawn(file, args, {
@@ -58,19 +62,39 @@ export function spawnPty(
   return id;
 }
 
-/** Bridge-facing open: `shell` → powershell/$SHELL, otherwise claude [--resume id]. */
+/** `--name` value: node-pty quotes each argv entry itself, so only drop what can't be in a name. */
+function safeName(name: string): string {
+  return name.replace(/[\x00-\x1f\x7f"]/g, '').trim().slice(0, 80);
+}
+
+/** Bridge-facing open: `shell` → powershell/$SHELL, otherwise claude [--resume id [--fork-session]] [--name n]. */
 export function openPty(opts: PtyOpenOptions, owner: number, cb: PtyCallbacks): string {
   let file: string;
-  let args: string[] = [];
+  const args: string[] = [];
   if (opts.shell) {
     file = IS_WIN ? 'powershell.exe' : process.env['SHELL'] || '/bin/bash';
   } else {
     const claude = resolveClaudePath();
     if (!claude) throw new Error('Claude Code binary not found (expected ~/.local/bin/claude or on PATH)');
     file = claude;
-    if (opts.resumeSessionId) args = ['--resume', opts.resumeSessionId];
+    if (opts.resumeSessionId) {
+      args.push('--resume', opts.resumeSessionId);
+      if (opts.fork) args.push('--fork-session');
+    }
+    const name = opts.name ? safeName(opts.name) : '';
+    if (name) args.push('--name', name);
   }
   return spawnPty(file, args, { cwd: opts.cwd, cols: opts.cols, rows: opts.rows }, cb, owner);
+}
+
+/** Pids of every process we spawned — never released by "Move into the village". */
+export function ownedPids(): number[] {
+  return [...ptys.values()].map((e) => e.pty.pid);
+}
+
+/** OS pid of the spawned process (claude.exe under ConPTY), or null once it is gone. */
+export function ptyPid(id: string): number | null {
+  return ptys.get(id)?.pty.pid ?? null;
 }
 
 export function writePty(id: string, data: string): void {
@@ -86,6 +110,8 @@ export function closePty(id: string): void {
   if (!entry) return;
   ptys.delete(id);
   try {
+    // ConPTY kill alone can leave claude.exe running headless — take the whole tree.
+    if (IS_WIN) spawnSync('taskkill', ['/pid', String(entry.pty.pid), '/T', '/F'], { windowsHide: true });
     entry.pty.kill();
   } catch {
     // already exited

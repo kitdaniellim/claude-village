@@ -3,7 +3,7 @@
 // never throws on malformed/unknown lines. See PROTOCOL.md "Status derivation".
 
 import type { AgentStatus } from './types';
-import { MAX_DETAIL_LEN } from './types';
+import { MAX_DETAIL_LEN, MAX_SUMMARY_LEN } from './types';
 
 /** Feed-event kinds a parser can emit (session lifecycle kinds come from the store). */
 export type ParsedEventKind = 'tool_start' | 'tool_done' | 'tool_error' | 'thinking' | 'turn_done';
@@ -12,6 +12,8 @@ export interface ParsedEvent {
   kind: ParsedEventKind;
   tool: string | null;
   detail: string | null;
+  /** tool_error only: absolute paths the failing tool was working on (where the bug lives). */
+  paths?: string[];
 }
 
 /** The effect of one parsed log line on its session. Consumed by AgentStore. */
@@ -25,6 +27,10 @@ export interface SessionUpdate {
   model?: string;
   cwd?: string;
   gitBranch?: string;
+  /** Latest assistant prose (raw, ≤ MAX_SUMMARY_LEN) — the closing summary once the turn ends. */
+  lastText?: string;
+  /** Absolute paths the latest tool touched (file input or paths in a shell command). */
+  workPaths?: string[];
   /** User-chosen name from a `custom-title` / `agent-name` line (/rename). */
   customTitle?: string;
   /** Title from an `ai-title` line (highest precedence). */
@@ -77,6 +83,40 @@ export function lastPathSegment(p: string): string {
 }
 
 /** Extract `detail` from a tool_use input per PROTOCOL.md rules. */
+const ABS_PATH_RE = /(?:[A-Za-z]:[\\/]|\/[a-z]\/)[^"'`|;&<>\r\n]*/;
+
+/** Normalise "/g/foo/bar" (Git Bash) to "G:\foo\bar"; leave Windows paths as they are. */
+function toWinPath(p: string): string {
+  const m = /^\/([a-z])\/(.*)$/.exec(p);
+  return (m ? `${(m[1] as string).toUpperCase()}:\\${m[2]}` : p).replace(/\//g, '\\').replace(/[\\]+$/, '');
+}
+
+/**
+ * Where the tool is really working: an absolute file/dir path from its input, or the
+ * first absolute path in a shell command (`cd "G:/…/repo" && …`). Sessions often stay
+ * in the coding root while touching a repo, so this places the hero better than `cwd`.
+ */
+function extractWorkPaths(input: unknown): string[] {
+  const obj = asRecord(input);
+  if (!obj) return [];
+  const out: string[] = [];
+  for (const key of ['file_path', 'notebook_path', 'path'] as const) {
+    const v = asString(obj[key])?.trim();
+    if (v && ABS_PATH_RE.test(v)) out.push(toWinPath(v));
+  }
+  const command = asString(obj['command']);
+  if (command) {
+    // Every absolute path in the command (quoted ones may contain spaces), first 4.
+    const re = /["']((?:[A-Za-z]:[\\/]|\/[a-z]\/)[^"']+)["']|((?:[A-Za-z]:[\\/]|\/[a-z]\/)[^\s"'`|;&<>]+)/g;
+    for (const m of command.matchAll(re)) {
+      const raw = (m[1] ?? m[2] ?? '').trim();
+      if (raw) out.push(toWinPath(raw));
+      if (out.length >= 4) break;
+    }
+  }
+  return out;
+}
+
 function extractDetail(input: unknown): string | null {
   const obj = asRecord(input);
   if (!obj) return null;
@@ -142,10 +182,14 @@ export class SessionParser {
   private carry = '';
   /** Last status this parser derived — used for thinking-transition detection. */
   private lastStatus: AgentStatus | null = null;
+  /** Latest assistant prose on the main chain (the turn's closing words once it ends). */
+  private lastText: string | null = null;
   /** Last line timestamp seen — fallback for timestamp-less lines (ai-title…). */
   private lastTs: number | null = null;
   /** tool_use id → tool name, so tool_done/tool_error can name the finished tool. */
   private readonly pendingTools = new Map<string, string>();
+  /** tool_use id → paths it touched, so a later error knows where it happened. */
+  private readonly pendingPaths = new Map<string, string[]>();
   // Diagnostics — skipping lines is per spec, but it must never be invisible.
   private linesParsed = 0;
   private linesSkippedJson = 0;
@@ -222,6 +266,7 @@ export class SessionParser {
     this.lastStatus = null;
     this.lastTs = null;
     this.pendingTools.clear();
+    this.pendingPaths.clear();
   }
 
   private parseLine(line: string): SessionUpdate | null {
@@ -288,6 +333,7 @@ export class SessionParser {
 
     let lastToolUse: { name: string; input: unknown } | null = null;
     let textSnippet: string | null = null;
+    let fullText = '';
     let sawToolUse = false;
 
     for (const b of blocks) {
@@ -299,27 +345,47 @@ export class SessionParser {
         if (!name) continue;
         sawToolUse = true;
         const id = asString(block['id']);
-        if (id) this.rememberTool(id, name);
+        if (id) {
+          this.rememberTool(id, name);
+          const p = extractWorkPaths(block['input']);
+          if (p.length > 0) this.pendingPaths.set(id, p);
+        }
         const detail = extractDetail(block['input']);
         update.events.push({ kind: 'tool_start', tool: name, detail });
         lastToolUse = { name, input: block['input'] };
-      } else if (blockType === 'text' && textSnippet === null) {
+      } else if (blockType === 'text') {
         const text = asString(block['text']);
-        if (text && text.trim()) textSnippet = truncateDetail(text);
+        if (text && text.trim()) {
+          if (textSnippet === null) textSnippet = truncateDetail(text);
+          fullText = fullText ? `${fullText}\n\n${text.trim()}` : text.trim();
+        }
       }
+    }
+
+    // Claude Code logs each content block on its own line: remember the latest prose so a turn
+    // that ends on a text-less line still has a closing summary.
+    if (fullText) {
+      this.lastText = clamp(fullText, MAX_SUMMARY_LEN);
+      update.lastText = this.lastText;
     }
 
     if (sawToolUse && lastToolUse) {
       update.status = 'running';
       update.tool = lastToolUse.name;
       update.detail = extractDetail(lastToolUse.input);
+      const paths = extractWorkPaths(lastToolUse.input);
+      if (paths.length > 0) update.workPaths = paths;
       return;
     }
 
     const stopReason = asString(message['stop_reason']);
     if (stopReason && TERMINAL_STOP_REASONS.has(stopReason)) {
       update.status = 'done';
-      update.events.push({ kind: 'turn_done', tool: null, detail: textSnippet });
+      update.events.push({
+        kind: 'turn_done',
+        tool: null,
+        detail: textSnippet ?? (this.lastText ? truncateDetail(this.lastText) : null),
+      });
       return;
     }
 
@@ -354,13 +420,18 @@ export class SessionParser {
       for (const tr of toolResults) {
         const id = asString(tr['tool_use_id']);
         const tool = id ? (this.pendingTools.get(id) ?? null) : null;
-        if (id) this.pendingTools.delete(id);
+        const paths = id ? this.pendingPaths.get(id) : undefined;
+        if (id) {
+          this.pendingTools.delete(id);
+          this.pendingPaths.delete(id);
+        }
         const isError = tr['is_error'] === true;
         if (isError) anyError = true;
         update.events.push({
           kind: isError ? 'tool_error' : 'tool_done',
           tool,
           detail: isError ? resultSnippet(tr['content']) : null,
+          ...(isError && paths ? { paths } : {}),
         });
       }
       update.status = anyError ? 'error' : 'thinking';
@@ -383,6 +454,10 @@ export class SessionParser {
 
   private rememberTool(id: string, name: string): void {
     this.pendingTools.set(id, name);
+    if (this.pendingPaths.size > MAX_PENDING_TOOLS) {
+      const oldestPath = this.pendingPaths.keys().next();
+      if (!oldestPath.done) this.pendingPaths.delete(oldestPath.value);
+    }
     if (this.pendingTools.size > MAX_PENDING_TOOLS) {
       const oldest = this.pendingTools.keys().next();
       if (!oldest.done) this.pendingTools.delete(oldest.value);

@@ -1,10 +1,12 @@
-// Terminal drawer width: ~44% of the viewport by default, min 420px, never so
+// Terminal drawer width: ~52% of the viewport by default, min 560px, never so
 // wide the village drops under 420px. Remembered in localStorage.
 
 import { useCallback, useEffect, useState } from 'react';
 
-const STORAGE_KEY = 'rts-agents.drawer.v1';
-export const DRAWER_MIN = 420;
+// v2: the old cramped default (~400 px) shouldn't carry over.
+const STORAGE_KEY = 'rts-agents.drawer.v2';
+export const DRAWER_MIN = 560;
+export const DRAWER_DEFAULT_RATIO = 0.52;
 const PARTY_W = 260;
 const VILLAGE_MIN = 420;
 
@@ -25,7 +27,7 @@ function loadWidth(): number {
   } catch {
     // fall through to the default
   }
-  return clampDrawerWidth(window.innerWidth * 0.44);
+  return clampDrawerWidth(window.innerWidth * DRAWER_DEFAULT_RATIO);
 }
 
 export function useDrawerWidth(): [number, (w: number) => void] {

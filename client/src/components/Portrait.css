@@ -1,0 +1,41 @@
+/* Hero portrait: sprite in a hero-coloured frame, pixel face as the fallback. */
+
+.portrait {
+  --portrait-skin: #eab985;
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  border: 2px solid;
+  box-shadow: 0 0 0 1px var(--ink);
+  overflow: hidden;
+  image-rendering: pixelated;
+  vertical-align: middle;
+}
+
+.portrait-img {
+  display: block;
+}
+
+/* Squires: the same hero-coloured frame, but dashed — still in training. */
+.portrait-squire {
+  border-style: dashed;
+}
+
+/* The programmatic hero's face: a skin bar with a shadow below it. */
+.portrait-face {
+  position: absolute;
+  top: 18%;
+  left: 15%;
+  width: 70%;
+  height: 32%;
+  background: var(--portrait-skin);
+  box-shadow: 0 35% 0 -15% rgba(0, 0, 0, 0.28);
+}
+
+.portrait-1x .portrait-face {
+  box-shadow: 0 11px 0 -4px rgba(0, 0, 0, 0.28);
+}
+
+.portrait-2x .portrait-face {
+  box-shadow: 0 22px 0 -8px rgba(0, 0, 0, 0.28);
+}

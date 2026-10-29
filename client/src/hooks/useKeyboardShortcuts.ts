@@ -1,20 +1,29 @@
-// Global shortcuts: Ctrl+` terminal drawer (works everywhere), and M / Esc / "/"
-// which are ignored while typing in an input or a terminal.
+// Global shortcuts: Ctrl+` drawer and Ctrl+Shift+F terminal focus mode (work
+// everywhere, the terminal included); single keys (A feed, B backpack, M mute,
+// Esc, "/") are ignored while typing in an input or a terminal.
 
 import { useEffect, useRef } from 'react';
 
 export interface ShortcutHandlers {
   toggleDrawer: () => void;
   toggleSound: () => void;
-  closeDrawer: () => void;
+  toggleFeed: () => void;
+  toggleBackpack: () => void;
+  toggleTerminalFocus: () => void;
+  /** Esc: the caller closes whatever is top-most (panel, then drawer). */
+  escape: () => void;
   focusFilter: () => void;
 }
 
 /** Shown in the settings popover. */
 export const SHORTCUTS: { keys: string; what: string }[] = [
   { keys: 'Ctrl + `', what: 'Toggle terminal drawer' },
+  { keys: 'A', what: 'Collapse / expand activity' },
+  { keys: 'Ctrl + Shift + F', what: 'Terminal focus mode' },
+  { keys: 'Ctrl + Shift + C / V', what: 'Copy / paste in the terminal' },
+  { keys: 'B', what: 'Open backpack (quest log)' },
   { keys: 'M', what: 'Toggle sound cues' },
-  { keys: 'Esc', what: 'Close drawer' },
+  { keys: 'Esc', what: 'Close panel / drawer' },
   { keys: '/', what: 'Focus party filter' },
 ];
 
@@ -38,15 +47,28 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers): void {
         ref.current.toggleDrawer();
         return;
       }
+      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.code === 'KeyF') {
+        e.preventDefault();
+        ref.current.toggleTerminalFocus();
+        return;
+      }
       if (e.ctrlKey || e.altKey || e.metaKey) return;
       if (isTypingTarget(e.target)) return;
       switch (e.key) {
+        case 'a':
+        case 'A':
+          ref.current.toggleFeed();
+          break;
+        case 'b':
+        case 'B':
+          ref.current.toggleBackpack();
+          break;
         case 'm':
         case 'M':
           ref.current.toggleSound();
           break;
         case 'Escape':
-          ref.current.closeDrawer();
+          ref.current.escape();
           break;
         case '/':
           e.preventDefault();

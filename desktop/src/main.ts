@@ -1,13 +1,16 @@
 // RTS Agents desktop shell: window + tray, boots the bun server / Vite client,
-// and serves the `window.rts` bridge (settings, claude path, PTYs, links).
+// and serves the `window.rts` bridge (settings, claude path, PTYs, focus, links, restart).
 // `electron . --smoke` runs a headless self-test instead.
 
 import { app, BrowserWindow, ipcMain, Menu, shell, Tray, type MenuItem } from 'electron';
+import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { DesktopSettings, PtyOpenOptions } from '../../client/src/types/desktop';
 import { resolveClaudePath } from './claude';
+import { findTranscript, focusSession } from './focus';
+import { releaseSession } from './release';
 import { trayIcon, windowIcon } from './icon';
 import {
   CLIENT_URL,
@@ -24,6 +27,8 @@ const argv = process.argv.slice(1);
 const SMOKE = argv.includes('--smoke');
 const DEV = argv.includes('--dev');
 const HIDDEN = argv.includes('--hidden');
+/** Set by restartApp on the relaunched instance: wait for the old one to let go of the lock. */
+const RELAUNCH = argv.includes('--relaunch');
 
 const DESKTOP_DIR = path.resolve(__dirname, '..');
 const CLIENT_INDEX = path.join(REPO_ROOT, 'client', 'dist', 'index.html');
@@ -32,6 +37,7 @@ let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let settings: DesktopSettings;
 let quitting = false;
+let restarting = false;
 
 // node-pty is loaded lazily so a broken native module degrades to "no terminals"
 // (and a clear SMOKE FAIL) instead of crashing the whole app at startup.
@@ -122,6 +128,13 @@ function createWindow(): BrowserWindow {
     }, 1500);
   });
   // A navigation/reload drops the renderer's subscriptions, so its PTYs are closed.
+  // Ctrl+Shift+R = restart the whole app (also beats the default menu's force-reload).
+  w.webContents.on('before-input-event', (e, input) => {
+    if (input.type !== 'keyDown' || !input.control || !input.shift || input.alt || input.meta) return;
+    if (input.key.toLowerCase() !== 'r') return;
+    e.preventDefault();
+    void restartApp();
+  });
   w.webContents.on('did-navigate', () => ptyModule?.closeOwnedPtys(w.webContents.id));
   w.webContents.on('destroyed', () => ptyModule?.closeOwnedPtys(w.webContents.id));
   return w;
@@ -152,6 +165,7 @@ function refreshTrayMenu(): void {
         },
       },
       { type: 'separator' },
+      { label: 'Restart', click: () => void restartApp() },
       { label: 'Quit', click: quit },
     ])
   );
@@ -181,9 +195,16 @@ function registerIpc(): void {
       rows: Number(o.rows) || 24,
       shell: o.shell === true,
     };
-    if (typeof o.resumeSessionId === 'string' && o.resumeSessionId) opts.resumeSessionId = o.resumeSessionId;
+    if (typeof o.resumeSessionId === 'string' && o.resumeSessionId) {
+      // Session ids are UUID-shaped; anything else would land in claude's argv as a flag.
+      if (!/^[\w-]+$/.test(o.resumeSessionId)) throw new Error('pty.open: malformed resumeSessionId');
+      opts.resumeSessionId = o.resumeSessionId;
+      if (o.fork === true) opts.fork = true;
+    }
+    if (typeof o.name === 'string' && o.name.trim()) opts.name = o.name;
     const sender = event.sender;
-    const id = loadPty().openPty(opts, sender.id, {
+    const pty = loadPty();
+    const id = pty.openPty(opts, sender.id, {
       onData: (ptyId, data) => {
         if (!sender.isDestroyed()) sender.send('pty:data', ptyId, data);
       },
@@ -191,7 +212,7 @@ function registerIpc(): void {
         if (!sender.isDestroyed()) sender.send('pty:exit', ptyId, code);
       },
     });
-    return { id };
+    return { id, pid: pty.ptyPid(id) ?? undefined };
   });
   ipcMain.on('pty:write', (_e, id: string, data: string) => {
     if (typeof id === 'string' && typeof data === 'string') ptyModule?.writePty(id, data);
@@ -203,11 +224,103 @@ function registerIpc(): void {
     if (typeof id === 'string') ptyModule?.closePty(id);
   });
 
+  ipcMain.handle('session:focus', (_e, req: unknown) => focusSession(req));
+  ipcMain.handle('session:transcript', (_e, sessionId: unknown) => findTranscript(sessionId));
+  ipcMain.handle('session:release', (_e, req: unknown) => releaseSession(req, () => ptyModule?.ownedPids() ?? []));
+
+  ipcMain.handle('tabs:load', () => loadTabState());
+  ipcMain.on('tabs:save', (_e, json: unknown) => saveTabState(json));
+  ipcMain.handle('prefs:load', (_e, key: unknown) => loadPref(key));
+  ipcMain.on('prefs:save', (_e, key: unknown, json: unknown) => savePref(key, json));
+
+  ipcMain.on('app:restart', () => void restartApp());
+
   ipcMain.on('shell:open', (_e, target: unknown) => {
     if (typeof target !== 'string' || target.length === 0) return;
     if (/^(?:[a-z][a-z0-9+.-]*:\/\/|mailto:)/i.test(target)) void shell.openExternal(target);
     else void shell.openPath(target);
   });
+}
+
+// ── terminal tab state (restored after a restart) ───────────────────────────
+
+const TAB_STATE_MAX = 512 * 1024;
+
+function tabStatePath(): string {
+  return path.join(app.getPath('userData'), 'tabs.json');
+}
+
+function loadTabState(): string | null {
+  try {
+    const raw = fs.readFileSync(tabStatePath(), 'utf8');
+    return raw.length <= TAB_STATE_MAX ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Written synchronously, so it is on disk before a restart kills anything. */
+function saveTabState(json: unknown): void {
+  if (typeof json !== 'string' || json.length > TAB_STATE_MAX) return;
+  try {
+    JSON.parse(json);
+    const file = tabStatePath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file + '.tmp', json);
+    fs.renameSync(file + '.tmp', file);
+  } catch (err) {
+    console.error('[desktop] could not save tab state:', (err as Error).message);
+  }
+}
+
+// ── UI preferences backup (prefs.json: { key: json }) ───────────────────────
+
+const PREF_KEY_RE = /^[a-z0-9-]{1,40}$/;
+const PREF_VALUE_MAX = 4 * 1024;
+
+function prefsPath(): string {
+  return path.join(app.getPath('userData'), 'prefs.json');
+}
+
+function readPrefs(): Record<string, string> {
+  try {
+    const o: unknown = JSON.parse(fs.readFileSync(prefsPath(), 'utf8'));
+    return o !== null && typeof o === 'object' ? (o as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function loadPref(key: unknown): string | null {
+  if (typeof key !== 'string' || !PREF_KEY_RE.test(key)) return null;
+  const v = readPrefs()[key];
+  return typeof v === 'string' ? v : null;
+}
+
+/** Same atomic write as the tab state; keys and sizes are bounded. */
+function savePref(key: unknown, json: unknown): void {
+  if (typeof key !== 'string' || !PREF_KEY_RE.test(key)) return;
+  if (typeof json !== 'string' || json.length > PREF_VALUE_MAX) return;
+  try {
+    JSON.parse(json);
+    const prefs = readPrefs();
+    prefs[key] = json;
+    const file = prefsPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file + '.tmp', JSON.stringify(prefs));
+    fs.renameSync(file + '.tmp', file);
+  } catch (err) {
+    console.error('[desktop] could not save preference:', (err as Error).message);
+  }
+}
+
+/** Chromium commits localStorage lazily; push it to disk before an abrupt exit. */
+function flushRendererStorage(): void {
+  try {
+    if (win && !win.isDestroyed()) win.webContents.session.flushStorageData();
+  } catch {
+    // window already torn down
+  }
 }
 
 // ── boot ─────────────────────────────────────────────────────────────────────
@@ -219,9 +332,51 @@ async function boot(): Promise<void> {
   createTray();
   win = createWindow();
   if (!HIDDEN) win.once('ready-to-show', () => win?.show());
+  await loadVillage(DEV);
+}
+
+/** Newest file mtime under a directory (recursive); 0 when unreadable. */
+function newestMtime(dir: string): number {
+  let newest = 0;
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const e of entries) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) newest = Math.max(newest, newestMtime(p));
+    else {
+      try {
+        newest = Math.max(newest, fs.statSync(p).mtimeMs);
+      } catch {
+        // vanished mid-scan
+      }
+    }
+  }
+  return newest;
+}
+
+/** client/dist is only usable when it was built after the last change in client/src. */
+function builtClientFresh(): boolean {
+  try {
+    return fs.statSync(CLIENT_INDEX).mtimeMs >= newestMtime(path.join(REPO_ROOT, 'client', 'src'));
+  } catch {
+    return false; // no build at all
+  }
+}
+
+/** Ensure the server (+ dev client when needed) and load the village into the window. */
+async function loadVillage(dev: boolean): Promise<void> {
+  if (!win || win.isDestroyed()) return;
   loadSplash('starting village…', 'checking server on :4444 and client on :4445');
 
-  const prod = !DEV && fs.existsSync(CLIENT_INDEX);
+  // A stale build would show an old village — fall back to the live Vite dev server instead.
+  const prod = !dev && builtClientFresh();
+  if (!dev && !prod && fs.existsSync(CLIENT_INDEX)) {
+    console.log('[desktop] client/dist is older than client/src — using the dev server (bun run build refreshes it)');
+  }
   const [server, client] = await Promise.all([
     ensureServer(),
     prod ? Promise.resolve<EnsureResult>('already-running') : ensureClient(),
@@ -242,6 +397,84 @@ async function boot(): Promise<void> {
   } else {
     await win.loadURL(CLIENT_URL);
   }
+}
+
+// ── restart ("easy button": window.rts.restart, tray, Ctrl+Shift+R) ─────────
+
+/** desktop/src (or the shared bridge types) changed after the last tsc build. */
+function shellStale(): boolean {
+  const bridgeTypes = path.join(REPO_ROOT, 'client', 'src', 'types', 'desktop.d.ts');
+  let typesMtime = 0;
+  try {
+    typesMtime = fs.statSync(bridgeTypes).mtimeMs;
+  } catch {
+    // missing types — tsc will say so
+  }
+  const src = Math.max(newestMtime(path.join(DESKTOP_DIR, 'src')), typesMtime);
+  return src > newestMtime(path.join(DESKTOP_DIR, 'dist'));
+}
+
+/** `tsc -p desktop` run by Electron-as-node (no npm/npx needed); async so the splash can paint. */
+function rebuildShell(): Promise<{ ok: boolean; output: string }> {
+  return new Promise((resolve) => {
+    let tsc: string;
+    try {
+      tsc = require.resolve('typescript/bin/tsc', { paths: [DESKTOP_DIR] });
+    } catch {
+      resolve({ ok: false, output: 'typescript is not installed in desktop/ (npm install)' });
+      return;
+    }
+    let output = '';
+    const child = spawn(process.execPath, [tsc, '-p', DESKTOP_DIR], {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    child.stdout?.on('data', (d: Buffer) => (output += d.toString()));
+    child.stderr?.on('data', (d: Buffer) => (output += d.toString()));
+    child.on('error', (err) => resolve({ ok: false, output: err.message }));
+    child.on('exit', (code) => resolve({ ok: code === 0, output: output.trim() }));
+  });
+}
+
+/** Rebuild a stale shell, stop terminals + the server/client we spawned, then relaunch in --dev. */
+async function restartApp(): Promise<void> {
+  if (restarting) return;
+  restarting = true;
+  if (win && !win.isDestroyed() && !win.isVisible()) showWindow();
+  // The renderer saves its tabs on every change (localStorage + tabs:save); flush before the splash unloads it.
+  flushRendererStorage();
+  if (shellStale()) {
+    loadSplash('rebuilding shell…', 'desktop/src changed — tsc -p desktop');
+    const { ok, output } = await rebuildShell();
+    if (!ok) {
+      // tsc still emits on type errors; show them briefly, then relaunch with what was emitted.
+      console.error(`[desktop] shell rebuild failed:
+${output}`);
+      loadSplash('shell rebuild reported errors — restarting anyway', output.slice(0, 800));
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+  loadSplash('restarting…', 'stopping terminals, server and client');
+  ptyModule?.closeAllPtys();
+  killChildren();
+  quitting = true;
+  // Free the lock first; the new instance also retries briefly (--relaunch) in case we linger.
+  app.releaseSingleInstanceLock();
+  const keep = argv.filter((a) => a.startsWith('--user-data-dir'));
+  app.relaunch({ args: [DESKTOP_DIR, '--dev', '--relaunch', ...keep] });
+  app.exit(0);
+}
+
+/** Single-instance lock; a relaunched instance waits up to 5 s for the old one to exit. */
+async function acquireLock(): Promise<boolean> {
+  if (app.requestSingleInstanceLock()) return true;
+  if (!RELAUNCH) return false;
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 250));
+    if (app.requestSingleInstanceLock()) return true;
+  }
+  return false;
 }
 
 // ── smoke test (`electron . --smoke`) ────────────────────────────────────────
@@ -299,14 +532,16 @@ async function smoke(): Promise<void> {
 
 app.setAppUserModelId('rts-agents.desktop');
 
-if (SMOKE) {
-  void smoke();
-} else if (!app.requestSingleInstanceLock()) {
-  app.quit();
-} else {
-  app.on('second-instance', showWindow);
+function startApp(): void {
+  // A relaunch (bun run desktop, the .cmd, the login item) reloads the village instead of
+  // just focusing a window that may still be showing an old build.
+  app.on('second-instance', (_e, argv) => {
+    showWindow();
+    void loadVillage(argv.includes('--dev'));
+  });
   app.on('before-quit', () => {
     quitting = true;
+    flushRendererStorage();
   });
   app.on('will-quit', () => {
     ptyModule?.closeAllPtys();
@@ -316,4 +551,13 @@ if (SMOKE) {
     if (quitting) app.quit();
   });
   void app.whenReady().then(boot);
+}
+
+if (SMOKE) {
+  void smoke();
+} else {
+  void acquireLock().then((locked) => {
+    if (locked) startApp();
+    else app.quit();
+  });
 }

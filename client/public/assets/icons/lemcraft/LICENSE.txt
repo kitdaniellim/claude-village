@@ -1,0 +1,10 @@
+icons/lemcraft/heart.png — from "LemCraft" on OpenGameArt
+=========================================================
+
+Source:  https://opengameart.org/content/lemcraft (file heart.png, 44x44; user-supplied via Downloads, 2026-10-15)
+Author:  Matt Hackett of Lost Decade Games (submitted by richtaur)
+Licence: CC0 1.0 Universal (public domain dedication) — https://creativecommons.org/publicdomain/zero/1.0/
+         Licence checked on the OpenGameArt page 2026-10-15. No attribution required; the page asks
+         "by Matt Hackett of Lost Decade Games", which we give anyway.
+
+Use: hearts floating over a hero petting the Simone dragon (client/src/world/dragonPlay.ts).

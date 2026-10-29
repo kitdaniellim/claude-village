@@ -11,6 +11,9 @@ export const CLIENT_URL = 'http://localhost:4445';
 
 const IS_WIN = process.platform === 'win32';
 const children = new Map<string, ChildProcess>();
+/** Set by killChildren so deliberate kills are not answered with a respawn. */
+let stopping = false;
+const serverRespawns: number[] = [];
 
 export type EnsureResult = 'already-running' | 'spawned' | 'failed';
 
@@ -56,9 +59,24 @@ function spawnBun(script: string): ChildProcess | null {
   child.on('exit', (code, signal) => {
     console.log(`[desktop] bun run ${script} exited (${code ?? signal})`);
     if (children.get(script) === child) children.delete(script);
+    if (script === 'dev:server' && !stopping) respawnServer();
   });
   children.set(script, child);
   return child;
+}
+
+/** The server we started died on its own: bring it back (max 3 times a minute). */
+function respawnServer(): void {
+  const now = Date.now();
+  while (serverRespawns.length > 0 && now - (serverRespawns[0] ?? 0) > 60_000) serverRespawns.shift();
+  if (serverRespawns.length >= 3) {
+    console.error('[desktop] bun run dev:server keeps exiting — not respawning again (use Restart in the tray)');
+    return;
+  }
+  serverRespawns.push(now);
+  setTimeout(() => {
+    if (!stopping) void ensureServer().then((r) => console.log(`[desktop] server respawn: ${r}`));
+  }, 1000);
 }
 
 export async function ensureServer(): Promise<EnsureResult> {
@@ -75,6 +93,7 @@ export async function ensureClient(): Promise<EnsureResult> {
 
 /** Kill every process tree we spawned (taskkill /T on Windows, SIGTERM elsewhere). */
 export function killChildren(): void {
+  stopping = true;
   for (const [script, child] of children) {
     if (child.pid === undefined || child.exitCode !== null) continue;
     try {

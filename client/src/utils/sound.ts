@@ -2,7 +2,7 @@
 // persists in localStorage; the AudioContext is unlocked on the first gesture
 // and never plays more than one cue per 400 ms.
 
-export type SoundCue = 'turn_done' | 'needs_you' | 'error' | 'session_new';
+export type SoundCue = 'turn_done' | 'needs_you' | 'error' | 'session_new' | 'reward';
 
 export const SOUND_STORAGE_KEY = 'rts-agents.sound.v1';
 const MIN_GAP_MS = 400;
@@ -38,6 +38,14 @@ const CUES: Record<SoundCue, Note[]> = {
   session_new: [
     { freq: 880, at: 0, dur: 0.05 },
     { freq: 1174.66, at: 0.055, dur: 0.06 },
+  ],
+  // item get: rising triangle arpeggio (C5 E5 G5 C6) with a square sparkle on top
+  reward: [
+    { freq: 523.25, at: 0, dur: 0.07, type: 'triangle', gain: 0.11 },
+    { freq: 659.25, at: 0.07, dur: 0.07, type: 'triangle', gain: 0.11 },
+    { freq: 783.99, at: 0.14, dur: 0.07, type: 'triangle', gain: 0.11 },
+    { freq: 1046.5, at: 0.21, dur: 0.22, type: 'triangle', gain: 0.13 },
+    { freq: 2093, at: 0.24, dur: 0.12, type: 'square', gain: 0.03 },
   ],
 };
 
@@ -89,6 +97,16 @@ export function unlockAudio(): void {
       // still locked — the next gesture will try again
     });
   }
+}
+
+/** Like playCue, but when the limiter drops the cue it retries once after the gap
+ *  (a reward lands in the same broadcast as the "your turn" fanfare). */
+export function playCueSoon(cue: SoundCue): void {
+  if (!enabled) return;
+  if (playCue(cue)) return;
+  window.setTimeout(() => {
+    playCue(cue);
+  }, MIN_GAP_MS + 60);
 }
 
 /** Plays a cue; returns false when muted, throttled or audio is still locked. */

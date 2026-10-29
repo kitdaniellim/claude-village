@@ -140,13 +140,25 @@ export interface WildPlace {
   firstSeenAt: number;
 }
 
+/** Temp / scratch / config folders are where tools run, not projects — never a place on the map. */
+export function isScratchCwd(cwd: string): boolean {
+  const segs = segments(cwd).map((s) => s.toLowerCase());
+  return segs.includes('temp') || segs.includes('tmp') || segs.includes('.claude') || segs.includes('scratchpad');
+}
+
 export function loadWildPlaces(): WildPlace[] {
   try {
     const raw = localStorage.getItem(WILD_STORAGE_KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed)
-      ? parsed.filter((p): p is WildPlace => typeof p === 'object' && p !== null && typeof (p as WildPlace).cwd === 'string')
+      ? parsed.filter(
+          (p): p is WildPlace =>
+            typeof p === 'object' &&
+            p !== null &&
+            typeof (p as WildPlace).cwd === 'string' &&
+            !isScratchCwd((p as WildPlace).cwd) // drops the old "Temp" landmark
+        )
       : [];
   } catch {
     return [];
@@ -223,9 +235,22 @@ export function resolvePlace(cwd: string | null, wild: WildPlace[] = loadWildPla
  * Null means "lives at the tavern".
  */
 export function resolveAgentPlace(
-  a: { cwd: string | null; rootCwd: string | null; title: string | null; customTitle: string | null },
+  a: {
+    cwd: string | null;
+    rootCwd: string | null;
+    title: string | null;
+    customTitle: string | null;
+    workPath?: string | null;
+    recentPaths?: string[];
+  },
   wild: WildPlace[] = loadWildPlaces()
 ): ResolvedPlace | null {
+  // The path the latest tool touched wins, but only when it lands in a known project —
+  // stray paths (scratchpads, ~/.claude) must not drag a hero off the map.
+  for (const p of a.recentPaths ?? (a.workPath ? [a.workPath] : [])) {
+    const byWork = resolvePlace(p, []);
+    if (byWork) return byWork;
+  }
   const byCwd = resolvePlace(a.cwd, wild) ?? resolvePlace(a.rootCwd, wild);
   if (byCwd) return byCwd;
   const text = `${a.customTitle ?? ''} ${a.title ?? ''}`.toLowerCase();
@@ -243,7 +268,7 @@ export function resolveAgentPlace(
  * updated list. The place is named after the cwd's last segment.
  */
 export function rememberWildPlace(cwd: string, wild: WildPlace[] = loadWildPlaces()): WildPlace[] {
-  if (isRootCwd(cwd) || resolvePlace(cwd, wild)) return wild;
+  if (isRootCwd(cwd) || isScratchCwd(cwd) || resolvePlace(cwd, wild)) return wild;
   const name = segments(cwd).at(-1) ?? cwd;
   const next = [...wild, { id: `wild-${hashString(cwd).toString(36)}`, name, cwd, firstSeenAt: Date.now() }];
   saveWildPlaces(next);

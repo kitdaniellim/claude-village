@@ -1,0 +1,140 @@
+/* Rally card under "Create Party": reopen the sessions a power cut / restart killed. */
+.rally {
+  flex: 0 0 auto;
+  margin: 8px 6px 0;
+  padding: 6px 7px 7px;
+  background: var(--bg-3);
+  border: 2px dashed var(--line-3);
+  box-shadow: var(--bevel-in);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rally-outage {
+  border-style: solid;
+  border-color: var(--gold-dark);
+  box-shadow: var(--bevel-in), 0 0 0 1px var(--gold-glow);
+}
+
+.rally-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.rally-glyph {
+  font-size: var(--fs-lg);
+  line-height: 1;
+  color: var(--gold);
+}
+
+.rally-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: var(--text-0);
+  letter-spacing: 0.03em;
+}
+
+.rally-sub {
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+.rally-x {
+  font: inherit;
+  font-size: var(--fs-lg);
+  line-height: 1;
+  padding: 0 2px;
+  background: none;
+  border: 0;
+  color: var(--text-4);
+  cursor: pointer;
+}
+
+.rally-x:hover {
+  color: var(--text-1);
+}
+
+.rally-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.rally-go {
+  flex: 1 1 auto;
+  height: 28px;
+}
+
+.rally-choose {
+  flex: 0 0 auto;
+  height: 28px;
+}
+
+.rally-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.rally-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.rally-row:hover {
+  background: var(--bg-4);
+  border-color: var(--line-2);
+}
+
+.rally-row input {
+  accent-color: var(--gold);
+  margin: 0;
+}
+
+.rally-face {
+  flex: 0 0 auto;
+}
+
+.rally-who {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.rally-name,
+.rally-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rally-name {
+  font-size: var(--fs-base);
+  color: var(--text-1);
+}
+
+.rally-meta {
+  font-size: var(--fs-xs);
+  color: var(--text-4);
+}
+
+.rally-hint {
+  color: var(--text-4);
+}

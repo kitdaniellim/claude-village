@@ -1,0 +1,20 @@
+user-preview/ — Pixel Art Animated Ogre / Pixel Art Animated Goblin
+===================================================================
+
+Source:  user-supplied marketplace preview images (Downloads, 2026-10-15):
+         Pixel-Art-Animated-Ogre-Game-Asset.png, Pixel-Art-Animated-Goblin-Game-Asset.png
+Author:  original author/licence unknown
+Licence: personal use only; verify licence before distributing
+
+These are not the purchased asset files. ogre.png and goblin.png were extracted from the
+1200x1000 preview images by script: upscale factor detected (ogre ~5.34x, goblin ~6.70x),
+nearest-neighbour downsampled to native art pixels, the grey gradient background and the
+"Pixel Based / Animated PNGs" badges removed, poses packed into uniform cells.
+
+ogre.png   — 3 x 3 cells of 64 x 39 px, feet on the cell floor, facing left.
+             row 0 idle (3), row 1 attack swing with club smear (3), row 2 walk (3)
+goblin.png — 2 x 3 cells of 36 x 34 px, feet on the cell floor, facing left.
+             row 0 run (2), row 1 attack with sword smear (2), row 2 idle (2)
+
+No death animation was shown in the previews; the game draws a programmatic fall + fade.
+If the real pack is bought, replace these with its PNGs and record its licence here.

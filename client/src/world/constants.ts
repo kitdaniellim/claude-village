@@ -18,16 +18,19 @@ export interface TilePos {
 
 /** Footprint (in tiles) of each place kind; the big cities get their own sizes. */
 export function footprintFor(kind: PlaceKind, placeId: string): { tw: number; th: number } {
-  if (kind === 'tavern') return { tw: 12, th: 8 };
+  if (kind === 'tavern') return { tw: 18, th: 12 };
   if (kind === 'city') return placeId === 'habits' ? { tw: 17, th: 12 } : { tw: 21, th: 14 };
   if (kind === 'dungeon') return { tw: 18, th: 12 };
   if (kind === 'lair') return { tw: 20, th: 14 };
   return { tw: 6, th: 6 };
 }
 
+/** Tavern default (centred on the map); also the fallback when no layout names it. */
+export const TAVERN_TILE: TilePos = { tx: 39, ty: 24 };
+
 /** Hand-tuned default positions for the static places. */
 export const DEFAULT_PLACE_TILES: Record<string, TilePos> = {
-  tavern: { tx: 42, ty: 26 },
+  tavern: TAVERN_TILE,
   sif: { tx: 5, ty: 4 },
   habits: { tx: 74, ty: 4 },
   momma: { tx: 5, ty: 43 },

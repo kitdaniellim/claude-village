@@ -1,0 +1,100 @@
+LPC Medieval Fantasy Character Sprites — attribution
+=====================================================
+
+Asset:    "[LPC] Medieval fantasy character sprites" (lpc_entry.zip, 3.2 MB)
+Author:   Johannes Sjölund (wulax) — https://opengameart.org/users/wulax
+          Base body / walk / slash / hurt / spellcast animations by
+          Stephen Challener (Redshrike), from the Liberated Pixel Cup base assets.
+          Bow and thrust animations, all clothing and equipment by wulax.
+Source:   https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
+          (OpenGameArt, submitted 2012-07-03)
+License:  Triple-licensed; use under any one of
+          - CC-BY-SA 3.0  https://creativecommons.org/licenses/by-sa/3.0/
+          - GPL 3.0       https://www.gnu.org/licenses/gpl-3.0.html
+          - OGA-BY 3.0    https://opengameart.org/content/oga-by-30-faq
+          The author waives the CC anti-DRM clause for platforms like iOS/Steam
+          provided credit is given (see the OpenGameArt page copyright notice).
+          RTS Agents uses the files under CC-BY-SA 3.0.
+Fetched:  2026-10-14 via curl from
+          https://opengameart.org/sites/default/files/lpc_entry.zip
+
+What is here: the png/ folder of the zip, unmodified (64x64 px sprite layers
+sorted by animation: walkcycle, slash, spellcast, thrust, bow, hurt), plus the
+pack README (README.txt). The GIMP sources (xcf/) and preview gifs (examples/)
+were not copied into the app bundle. Nothing was modified.
+
+Usage in RTS Agents: client/src/world/lpcHero.ts composites BODY / FEET /
+LEGS / TORSO / BELT / HANDS / HEAD / WEAPON / BEHIND layers at runtime into
+one character sheet per hero look and draws them at 0.5x (32 px cells).
+
+Attribution line (CC-BY-SA 3.0):
+  "[LPC] Medieval fantasy character sprites" by wulax (Johannes Sjölund), with
+  base sprites by Stephen Challener (Redshrike), CC-BY-SA 3.0 / GPL 3.0 /
+  OGA-BY 3.0 — https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
+
+
+Pack README (verbatim)
+----------------------
+
+General:
+
+Files in xcf/ folder are Gimp files made with version 2.8. Use this version to take advantage of layer groups in the image. These images are a kind of source image. The file male_sprites.xcf contains all the different animations, including the animations walk, slash, hurt, spellcast from base lpc assets, as well as bow and thrust animations which are made by me.
+
+Images in png/ folder are all sprite animation sheets in 64x64 px grids. Files are sorted by animation type in separate folders, named in convention BODYPART_part_name. In some cases part name contains suggestion for use as a kit, e.g. "leather_armor", "robe", "plate_armor", "chain_armor", but many more combinations are possible.
+The files BODY_male in folders hurt, slash, spellcast, walkcycle, are obviously part of the base lpc assets and are only provided for completeness.
+
+The folder examples/ contains animated gif images which demonstrates some different clothes, equipment and color combinations. You can preview them easily in a web browser or image manipulation program.
+
+Note that the skeleton animation sheet is compatible with the clothes and equipment sprites, but the combat dummy animation is not.
+
+
+Animation sequence information:
+
+Bow animation:
+  1-9 Raise bow and aim
+  10 Loose arrow
+  11-13 Grab new arrow
+  5-9 Aim new arrow
+  10 Loose new arrow
+
+Thrust animation:
+  1-4 Raise staff
+  5-8 Thrust loop.
+
+Skeleton (and male) walk animation:
+  1 Stand/idle
+  2-9 Walkcycle
+
+
+Sprite order information:
+
+The best order to place sprites in top to bottom is visible in the xcf files:
+  1. WEAPON
+  2. HANDS
+  3. HEAD
+  4. BELT
+  5. TORSO
+  6. LEGS
+  7. FEET
+  8. BODY
+  9. BEHIND
+
+
+Gif animation tips:
+
+To create an animated gif from any of the sprite sheets use ImageMagic and issue these commands:
+
+Cut the sheet into separate image files:
+convert some_sheet_name.png -crop 64x64 +repage +adjoin tile_%02d.png
+
+Then join the images into a gif:
+convert -delay 12 -loop 0 -dispose Background tile_*.png animation.gif
+
+
+Contact:
+
+Johannes Sjölund
+
+j.sjolund@gmail.com
+
+Freenode: wulax

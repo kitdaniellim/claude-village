@@ -1,47 +1,128 @@
+/* Activity dock — full log, or a one-line strip with the latest event. */
+
 .feed {
   position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: #141826;
-  border-top: 2px solid #2a3046;
+  overflow: hidden;
+  background: var(--bg-2);
+  border-top: 2px solid var(--line-2);
+  box-shadow: 0 -2px 0 0 var(--ink);
 }
 
-.feed-header {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 5px 12px;
-  border-bottom: 2px solid #232a40;
-  background: #181d2e;
+.feed-head {
+  flex: 0 0 auto;
+  min-height: var(--feed-strip-h);
+  height: var(--feed-strip-h);
+  padding-left: var(--sp-1);
+  gap: var(--sp-2);
 }
 
-.feed-title {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
+.feed-collapsed .feed-head {
+  border-bottom: 0;
+}
+
+.feed-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px 0 5px;
+  color: inherit;
+  background: transparent;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
+}
+
+.feed-toggle:hover {
+  background: var(--bg-4);
+  border-color: var(--line-3);
+}
+
+.feed-toggle-icon {
+  color: var(--text-3);
+}
+
+.feed-toggle:hover .feed-toggle-icon {
+  color: var(--gold);
+}
+
+.feed-unread {
+  font-size: var(--fs-2xs);
+  font-weight: 800;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #e7d9ad;
+  line-height: 1;
+  padding: 3px 6px;
+  color: var(--bg-1);
+  background: var(--gold);
+  border: 1px solid var(--gold-dark);
+  box-shadow: 0 1px 0 0 var(--ink);
+  animation: unread-in var(--dur-base) var(--ease-bounce);
+  white-space: nowrap;
+}
+
+@keyframes unread-in {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Latest event shown inline while collapsed. */
+.feed-peek {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  padding-left: var(--sp-1);
+  border-left: 2px solid var(--line-2);
+  font-size: var(--fs-sm);
+  opacity: 0.85;
+}
+
+.feed-spacer {
+  flex: 1 1 0;
+}
+
+.feed-collapsed .feed-spacer {
+  display: none;
 }
 
 .feed-hint {
-  font-size: 9px;
-  color: #6e7794;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-4);
 }
+
+.feed-btn {
+  width: 24px;
+  height: 22px;
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+}
+
+/* ── Log ─────────────────────────────────────────────────────────────────── */
 
 .feed-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 6px 12px 8px;
-  font-family: inherit;
-  font-size: 11px;
+  padding: 6px var(--sp-3) 8px;
+  font-size: var(--fs-base);
   line-height: 1.65;
 }
 
 .feed-empty {
-  color: #6e7794;
-  font-size: 11px;
+  color: var(--text-4);
+  font-size: var(--fs-base);
   padding-top: 12px;
   text-align: center;
 }
@@ -49,20 +130,20 @@
 .feed-line {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--sp-2);
   white-space: nowrap;
   overflow: hidden;
 }
 
 .feed-time {
-  color: #5d6685;
   flex: 0 0 auto;
+  color: var(--text-5);
 }
 
 .feed-chip {
   flex: 0 0 auto;
   font-weight: 700;
-  font-size: 10px;
+  font-size: var(--fs-sm);
   border: 1px solid;
   padding: 0 5px;
   background: rgba(0, 0, 0, 0.25);
@@ -77,12 +158,12 @@
 
 .feed-tool {
   flex: 0 0 auto;
-  color: #dde3f2;
+  color: var(--text-1);
   font-weight: 600;
 }
 
 .feed-detail {
-  color: #8e97b8;
+  color: var(--text-3);
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -91,18 +172,18 @@
   position: absolute;
   right: 16px;
   bottom: 12px;
-  font: inherit;
-  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #11141d;
-  background: #ffd97a;
-  border: 2px solid #8a6f2e;
-  padding: 3px 10px;
-  cursor: pointer;
-  box-shadow: 0 2px 0 0 #0b0d14;
+  animation: jump-in var(--dur-base) var(--ease-out);
 }
 
-.feed-jump:hover {
-  background: #ffe49a;
+@keyframes jump-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

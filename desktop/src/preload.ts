@@ -2,7 +2,17 @@
 // Must stay identical in shape to client/src/types/desktop.d.ts.
 
 import { contextBridge, ipcRenderer } from 'electron';
-import type { DesktopBridge, DesktopSettings, PtyHandle, PtyOpenOptions } from '../../client/src/types/desktop';
+import type {
+  DesktopBridge,
+  DesktopSettings,
+  FocusSessionRequest,
+  FocusSessionResult,
+  PtyHandle,
+  PtyOpenOptions,
+  ReleaseSessionRequest,
+  ReleaseSessionResult,
+  TranscriptLookup,
+} from '../../client/src/types/desktop';
 
 type DataCb = (data: string) => void;
 type ExitCb = (code: number) => void;
@@ -52,7 +62,19 @@ const bridge: DesktopBridge = {
     onData: (id, cb) => subscribe(dataSubs, id, cb),
     onExit: (id, cb) => subscribe(exitSubs, id, cb),
   },
+  focusSession: (req: FocusSessionRequest): Promise<FocusSessionResult> => ipcRenderer.invoke('session:focus', req),
+  findTranscript: (sessionId: string): Promise<TranscriptLookup> => ipcRenderer.invoke('session:transcript', sessionId),
+  releaseSession: (req: ReleaseSessionRequest): Promise<ReleaseSessionResult> => ipcRenderer.invoke('session:release', req),
+  tabState: {
+    load: (): Promise<string | null> => ipcRenderer.invoke('tabs:load'),
+    save: (json: string) => ipcRenderer.send('tabs:save', json),
+  },
+  prefs: {
+    load: (key: string): Promise<string | null> => ipcRenderer.invoke('prefs:load', key),
+    save: (key: string, json: string) => ipcRenderer.send('prefs:save', key, json),
+  },
   openExternal: (target) => ipcRenderer.send('shell:open', target),
+  restart: () => ipcRenderer.send('app:restart'),
 };
 
 contextBridge.exposeInMainWorld('rts', bridge);

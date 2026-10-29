@@ -1,0 +1,16 @@
+Dragon sprite sheet — attribution
+=================================
+
+File:     reddragonfly3.png (west-facing sheet, unmodified; 820x644, 4x4 grid of 205x161 cells)
+Asset:    "Red Dragon" (flying dragon, LPC viewpoint — attack / move / hit)
+Author:   ZaPaper (https://opengameart.org/users/zapaper)
+          Credits to Buko Studios (http://www.buko-studios.com/)
+          Commissioned by PlayCraft (https://www.playcraftapp.com/)
+Source:   https://opengameart.org/content/red-dragon-0  (OpenGameArt node 79018)
+License:  Creative Commons Attribution 3.0 Unported (CC-BY 3.0)
+          https://creativecommons.org/licenses/by/3.0/
+Fetched:  2026-10-14
+
+Usage in RTS Agents: client/src/world/dragonSprite.ts draws the flight loop
+(rows 0-1) and the attack frames (rows 2-3) of this sheet for the dragon at the
+Simone lair. No changes were made to the file.

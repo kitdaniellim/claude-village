@@ -15,6 +15,13 @@ import type { RenderedTemplate } from './sprites';
 export type Landmark = WildLandmark;
 const LANDMARKS: Landmark[] = ['ruins', 'stones', 'grove', 'camp', 'windmill', 'shrine', 'tower', 'cottage'];
 
+/** Tavern inn: the 32x18 matrix at scale 4; plaza ellipse x-radius (y is 0.82 of it). */
+export const TAVERN_SCALE = 4;
+export const TAVERN_W = 32 * TAVERN_SCALE;
+export const TAVERN_H = 18 * TAVERN_SCALE;
+export const PLAZA_R = 100;
+export const PLAZA_SQUASH = 0.82;
+
 export interface BuildingGeom {
   placeId: string;
   repoId: string;
@@ -96,18 +103,19 @@ export function computePlaceGeom(def: PlaceDef, tile: TilePos): PlaceGeom {
 
   switch (def.kind) {
     case 'tavern': {
-      const plazaC = { x: cx, y: rect.y + 74 };
-      const bx = Math.round(cx - 48);
-      const by = rect.y + 6;
-      base.plaza = { c: plazaC, r: 58 };
-      base.gate = { x: cx, y: by + 54 };
-      base.approach = { x: cx, y: by + 70 };
-      base.square = { x: cx, y: plazaC.y + 20 };
+      // scale-4 inn (128x72) on the top of a 200 px plaza; heroes rest on the lower half
+      const plazaC = { x: cx, y: rect.y + 102 };
+      const bx = Math.round(cx - TAVERN_W / 2);
+      const by = rect.y + 12;
+      base.plaza = { c: plazaC, r: PLAZA_R };
+      base.gate = { x: cx, y: by + TAVERN_H };
+      base.approach = { x: cx, y: by + TAVERN_H + 18 };
+      base.square = { x: cx, y: plazaC.y + 24 };
       base.bannerAt = { x: cx, y: rect.y - 14 };
-      base.chimneys = [{ x: bx + 20, y: by + 2 }];
+      base.chimneys = [{ x: bx + 26, y: by + 2 }];
       base.torches = [
-        { x: bx - 8, y: by + 40 },
-        { x: bx + 104, y: by + 40 },
+        { x: bx - 10, y: by + 54 },
+        { x: bx + TAVERN_W + 10, y: by + 54 },
       ];
       const tav = BUILDING_DEFS.tavern;
       base.buildings = [
@@ -115,12 +123,12 @@ export function computePlaceGeom(def: PlaceDef, tile: TilePos): PlaceGeom {
           placeId: def.id,
           repoId: 'tavern',
           name: 'The Tavern',
-          rect: { x: bx, y: by, w: 96, h: 54 },
-          door: { x: bx + 47, y: by + 58 },
-          glow: matrixRects(tav.rows, tav.glowChars, 3).map((r) => ({ ...r, x: r.x + bx, y: r.y + by })),
-          chimney: { x: bx + 20, y: by + 2 },
+          rect: { x: bx, y: by, w: TAVERN_W, h: TAVERN_H },
+          door: { x: bx + 62, y: by + TAVERN_H + 4 },
+          glow: matrixRects(tav.rows, tav.glowChars, TAVERN_SCALE).map((r) => ({ ...r, x: r.x + bx, y: r.y + by })),
+          chimney: { x: bx + 26, y: by + 2 },
           day: null,
-          lit: { img: renderMatrix(tav.rows, { ...tav.palette, ...tav.lit }, 3), x: bx, y: by },
+          lit: { img: renderMatrix(tav.rows, { ...tav.palette, ...tav.lit }, TAVERN_SCALE), x: bx, y: by },
         },
       ];
       break;
@@ -188,7 +196,8 @@ export function computePlaceGeom(def: PlaceDef, tile: TilePos): PlaceGeom {
           repoId: repo.id,
           name: repo.name,
           rect: r,
-          door: { x: dx, y: faceY + 22 },
+          // heroes stand on the scorched ground below the name plate
+          door: { x: dx, y: faceY + 32 },
           glow: [{ x: dx - 3, y: faceY - 12, w: 6, h: 6 }],
           chimney: null,
           day: null,
@@ -214,7 +223,7 @@ export function computePlaceGeom(def: PlaceDef, tile: TilePos): PlaceGeom {
           repoId: repo.id,
           name: repo.name,
           rect: r,
-          door: { x: dx, y: baseY + 24 },
+          door: { x: dx, y: baseY + 32 },
           glow: [{ x: dx - 4, y: baseY - 14, w: 8, h: 8 }],
           chimney: null,
           day: null,
@@ -239,7 +248,7 @@ export function computePlaceGeom(def: PlaceDef, tile: TilePos): PlaceGeom {
           repoId: repo?.id ?? def.id,
           name: repo?.name ?? def.name,
           rect: { x: cx - 30, y: rect.y + 4, w: 60, h: 72 },
-          door: { x: cx - 4, y: cy + 40 },
+          door: { x: cx - 4, y: cy + 48 },
           glow: lm === 'tower' ? [{ x: cx - 3, y: cy - 36, w: 6, h: 6 }, { x: cx - 3, y: cy - 16, w: 6, h: 6 }] : lm === 'cottage' ? [{ x: cx - 14, y: cy - 2, w: 6, h: 6 }, { x: cx + 8, y: cy - 2, w: 6, h: 6 }] : [],
           chimney: lm === 'cottage' ? { x: cx + 14, y: cy - 30 } : null,
           day: null,
@@ -264,8 +273,8 @@ function buildingGeom(placeId: string, repoId: string, name: string, tpl: Render
     repoId,
     name,
     rect: { x: bx, y: by, w: tpl.w, h: tpl.h },
-    // heroes stand just below the name plate, not on it
-    door: { x: bx + t.doorDx, y: by + tpl.h + 20 },
+    // heroes stand in the lane below the name plate (plates are ~13 world px tall at the fit zoom)
+    door: { x: bx + t.doorDx, y: by + tpl.h + 30 },
     glow: matrixRects(t.rows, t.glowChars, 2).map((r) => ({ ...r, x: r.x + bx, y: r.y + by })),
     chimney: t.chimney ? { x: bx + t.chimney.x, y: by + t.chimney.y } : null,
     day: { img: tpl.day, x: bx, y: by },
@@ -358,40 +367,44 @@ function drawTavernPlaza(ctx: CanvasRenderingContext2D, g: PlaceGeom, rng: () =>
   const plaza = g.plaza;
   if (!plaza) return;
   const { c, r } = plaza;
-  drawPixelEllipse(ctx, c.x, c.y, r + 4, Math.round((r + 4) * 0.82), '#9c8d72');
-  drawPixelEllipse(ctx, c.x, c.y, r, Math.round(r * 0.82), '#bcab8d');
-  cobbles(ctx, rng, c.x, c.y, r, 420, 0.82);
+  const sq = PLAZA_SQUASH;
+  drawPixelEllipse(ctx, c.x, c.y, r + 4, Math.round((r + 4) * sq), '#9c8d72');
+  drawPixelEllipse(ctx, c.x, c.y, r, Math.round(r * sq), '#bcab8d');
+  cobbles(ctx, rng, c.x, c.y, r, 1250, sq);
   // dithered rim
-  for (let i = 0; i < 200; i++) {
-    const a = (i / 200) * Math.PI * 2;
+  for (let i = 0; i < 340; i++) {
+    const a = (i / 340) * Math.PI * 2;
     ctx.fillStyle = i % 3 === 0 ? '#9c8d72' : '#ab9b7e';
-    ctx.fillRect(Math.round(c.x + Math.cos(a) * (r - 1)), Math.round(c.y + Math.sin(a) * (r - 1) * 0.82), 2, 2);
+    ctx.fillRect(Math.round(c.x + Math.cos(a) * (r - 1)), Math.round(c.y + Math.sin(a) * (r - 1) * sq), 2, 2);
   }
-  // the tavern (scale 3 — the heart of the village)
+  // the tavern (scale 4 — the heart of the village)
   const b = g.buildings[0];
   if (b) {
     const tav = BUILDING_DEFS.tavern;
-    drawPixelEllipse(ctx, b.rect.x + 48, b.rect.y + 54, 52, 6, 'rgba(40,30,15,0.28)');
-    ctx.drawImage(renderMatrix(tav.rows, tav.palette, 3), b.rect.x, b.rect.y);
+    drawPixelEllipse(ctx, b.rect.x + TAVERN_W / 2, b.rect.y + TAVERN_H, TAVERN_W / 2 + 6, 7, 'rgba(40,30,15,0.28)');
+    ctx.drawImage(renderMatrix(tav.rows, tav.palette, TAVERN_SCALE), b.rect.x, b.rect.y);
     // hanging mug sign
+    const sx = b.rect.x + TAVERN_W;
+    const sy = b.rect.y + 40;
     ctx.fillStyle = '#3a2d1f';
-    ctx.fillRect(b.rect.x + 96, b.rect.y + 30, 10, 2);
+    ctx.fillRect(sx, sy, 13, 2);
     ctx.fillStyle = '#c98a3a';
-    ctx.fillRect(b.rect.x + 101, b.rect.y + 32, 6, 6);
+    ctx.fillRect(sx + 6, sy + 2, 8, 8);
     ctx.fillStyle = '#f4ead2';
-    ctx.fillRect(b.rect.x + 101, b.rect.y + 32, 6, 2);
+    ctx.fillRect(sx + 6, sy + 2, 8, 3);
   }
-  // tables, barrels, lantern posts and a small well
-  drawTable(ctx, c.x - 54, c.y + 12);
-  drawTable(ctx, c.x + 36, c.y + 14);
-  drawBarrel(ctx, c.x - 60, c.y - 22);
-  drawBarrel(ctx, c.x - 50, c.y - 20);
-  drawBarrel(ctx, c.x + 54, c.y - 18);
-  drawLanternPost(ctx, c.x - 40, c.y + 40);
-  drawLanternPost(ctx, c.x + 40, c.y + 40);
+  // tables, barrels, lantern posts and a well, all kept off the rest grid (world/plaza.ts)
+  drawTable(ctx, c.x - 94, c.y - 34);
+  drawTable(ctx, c.x + 76, c.y - 30);
+  drawBarrel(ctx, c.x + 66, c.y - 52);
+  drawBarrel(ctx, c.x + 75, c.y - 48);
+  drawBarrel(ctx, c.x - 92, c.y + 20);
+  drawBarrel(ctx, c.x - 82, c.y + 26);
+  drawLanternPost(ctx, c.x - 72, c.y + 52);
+  drawLanternPost(ctx, c.x + 72, c.y + 52);
   // well
-  const wx = c.x + 60;
-  const wy = c.y + 30;
+  const wx = c.x + 84;
+  const wy = c.y + 28;
   drawPixelEllipse(ctx, wx, wy + 6, 9, 3, 'rgba(40,30,15,0.25)');
   drawPixelEllipse(ctx, wx, wy, 8, 5, '#6e7682');
   drawPixelEllipse(ctx, wx, wy - 1, 6, 3, '#3f6f9e');
