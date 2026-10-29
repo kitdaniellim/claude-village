@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Global shortcut. Symlink this file somewhere on your PATH, e.g.:
+#   ln -s "$(pwd)/bin/rts-agents" /usr/local/bin/rts-agents
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+ROOT="$(cd -P "$(dirname "$SOURCE")/.." >/dev/null 2>&1 && pwd)"
+
+exec "$ROOT/scripts/start.sh" "$@"

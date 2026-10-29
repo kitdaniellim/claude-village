@@ -1,0 +1,25 @@
+{
+  "name": "rts-agents-desktop",
+  "productName": "RTS Agents",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron desktop shell for the RTS Agents village dashboard",
+  "main": "dist/main.js",
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js",
+    "rebuild": "electron-rebuild -f -w node-pty",
+    "build": "tsc -p .",
+    "dev": "npm run build && electron . --dev",
+    "start": "npm run build && electron .",
+    "smoke": "npm run build && electron . --smoke"
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.1",
+    "@types/node": "^24.0.0",
+    "electron": "^44.7.2",
+    "typescript": "^5.7.3"
+  }
+}

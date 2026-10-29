@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+.vite/
+
+# desktop
+desktop/node_modules/
+desktop/dist/
+.playwright-mcp/

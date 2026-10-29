@@ -1,0 +1,22 @@
+.app {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) 160px;
+  background: #11141d;
+  color: #cfd6e6;
+}
+
+/* Columns are set inline: party | village | (terminal drawer when open). */
+.app-main {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-village {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}

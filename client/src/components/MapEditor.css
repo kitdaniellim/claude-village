@@ -1,0 +1,65 @@
+.map-editor-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  z-index: 5;
+}
+
+.map-editor-banner {
+  pointer-events: auto;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: #1d2233;
+  border: 2px solid #3c4566;
+  box-shadow:
+    0 0 0 2px #0b0d14,
+    0 4px 0 0 #0b0d14;
+  color: #e7d9ad;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.map-editor-icon {
+  color: #ffd97a;
+  font-size: 13px;
+}
+
+.map-editor-text {
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: #b8c0da;
+}
+
+.map-editor-btn {
+  font: inherit;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #e7d9ad;
+  background: #2a3046;
+  border: 2px solid #4a547a;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.map-editor-btn:hover {
+  background: #353d5c;
+  border-color: #6b76a8;
+}
+
+.map-editor-done {
+  background: #3c5a3a;
+  border-color: #5d8a58;
+}
+
+.map-editor-done:hover {
+  background: #497046;
+  border-color: #79a874;
+}

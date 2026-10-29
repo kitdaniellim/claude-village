@@ -1,0 +1,24 @@
+{
+  "name": "rts-agents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "start": "concurrently \"bun run dev:server\" \"bun run dev:client\"",
+    "dev:server": "cd server && bun --watch src/index.ts",
+    "dev:client": "cd client && bunx vite",
+    "build": "cd client && bunx vite build",
+    "typecheck": "bunx tsc --noEmit -p server/tsconfig.json && bunx tsc --noEmit -p client/tsconfig.json",
+    "desktop": "cd desktop && npm run dev",
+    "desktop:install": "cd desktop && npm install",
+    "desktop:smoke": "cd desktop && npm run smoke"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}
