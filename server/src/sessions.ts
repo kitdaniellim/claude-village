@@ -4,9 +4,9 @@
 // only tell us what a session is doing.
 
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { LIVE_POLL_INTERVAL_MS } from './types';
+import { tempDirs } from './watcher';
 
 export interface LiveSession {
   pid: number;
@@ -62,10 +62,12 @@ function parseSessionFile(file: string, installDir: string): LiveSession | null 
   if (kind !== null && kind !== 'interactive') return null;
   const cwd = asStr(r['cwd']);
   // Also any sub-folder of %TEMP% (the summariser runs from %TEMP%\remember-summarizer-cwd-*).
-  const tmp = path.resolve(os.tmpdir()).toLowerCase();
   if (cwd) {
     const c = path.resolve(cwd).toLowerCase();
-    if (c === tmp || c.startsWith(tmp + path.sep)) return null;
+    for (const t of tempDirs()) {
+      const tmp = path.resolve(t).toLowerCase();
+      if (c === tmp || c.startsWith(tmp + path.sep)) return null;
+    }
   }
   const status = asStr(r['status']);
   return {

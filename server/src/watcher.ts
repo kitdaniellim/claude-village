@@ -24,13 +24,31 @@ const NEWLINE = 0x0a;
 /** Consecutive non-ENOENT stat failures tolerated before untracking a file. */
 const STAT_FAILURE_UNTRACK_AFTER = 5;
 
-/** Claude's project slug for the OS temp dir, e.g. "C--Users-kitda-AppData-Local-Temp". */
-const TEMP_SLUG = os.tmpdir().replace(/[^A-Za-z0-9]/g, '-').toLowerCase();
+let tempDirsCache: string[] | null = null;
+
+/**
+ * Claude's project slugs for the OS temp dir, e.g. "C--Users-kitda-AppData-Local-Temp". Both the
+ * reported and the resolved path: on macOS tmpdir() is /var/folders/… but claude records the
+ * symlink-resolved /private/var/folders/….
+ */
+const TEMP_SLUGS = [...new Set(tempDirs().map((d) => d.replace(/[^A-Za-z0-9]/g, '-').toLowerCase()))];
+
+/** The OS temp dir as reported and with symlinks resolved (resolved once; polled per session file). */
+export function tempDirs(): string[] {
+  if (tempDirsCache) return tempDirsCache;
+  const dirs = [os.tmpdir()];
+  try {
+    dirs.push(fs.realpathSync(os.tmpdir()));
+  } catch {
+    // unresolvable — the reported path is all we have
+  }
+  return (tempDirsCache = dirs);
+}
 
 /** True for the temp dir's own slug and any sub-folder of it. */
 export function isTempProjectSlug(slug: string): boolean {
   const s = slug.toLowerCase();
-  return s === TEMP_SLUG || s.startsWith(`${TEMP_SLUG}-`);
+  return TEMP_SLUGS.some((t) => s === t || s.startsWith(`${t}-`));
 }
 
 /** Best-effort error code (falls back to the message) for log lines. */

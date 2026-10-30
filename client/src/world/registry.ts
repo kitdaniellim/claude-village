@@ -143,7 +143,9 @@ export interface WildPlace {
 /** Temp / scratch / config folders are where tools run, not projects — never a place on the map. */
 export function isScratchCwd(cwd: string): boolean {
   const segs = segments(cwd).map((s) => s.toLowerCase());
-  return segs.includes('temp') || segs.includes('tmp') || segs.includes('.claude') || segs.includes('scratchpad');
+  // macOS per-user temp: /var/folders/<xx>/<id>/T/… (claude reports it as /private/var/folders/…).
+  const macTemp = segs.some((s, i) => s === 'var' && segs[i + 1] === 'folders');
+  return macTemp || segs.includes('temp') || segs.includes('tmp') || segs.includes('.claude') || segs.includes('scratchpad');
 }
 
 export function loadWildPlaces(): WildPlace[] {
