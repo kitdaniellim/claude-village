@@ -175,6 +175,18 @@ bun run desktop           # starts the server/client if needed, opens the window
 bun run desktop:smoke     # headless self-test: SMOKE OK <claude version>
 ```
 
+### One-click launch
+
+| | Install once | Then |
+|---|---|---|
+| **macOS** | `bun run launcher:mac` → `~/Applications/RTS Agents.app` | ⌘Space → *RTS Agents*, or drag it to the Dock. Double-clicking `RTS Agents.command` in Finder also works. |
+| **Windows** | `bun run launcher:win` → Desktop + Start-menu shortcuts | Start → *RTS Agents* (right-click → Pin to taskbar), or double-click `RTS Agents.cmd`. |
+
+Both launchers install missing dependencies on first run. On macOS the app logs to
+`~/.rts-agents/desktop.log`, and **Launch on startup** writes a LaunchAgent at
+`~/Library/LaunchAgents/dev.rts-agents.desktop.plist`. If you move the repo, run the install
+command again.
+
 ## Development
 
 ```sh

@@ -15,7 +15,9 @@
     "typecheck": "bunx tsc --noEmit -p server/tsconfig.json && bunx tsc --noEmit -p client/tsconfig.json",
     "desktop": "cd desktop && npm run dev",
     "desktop:install": "cd desktop && npm install",
-    "desktop:smoke": "cd desktop && npm run smoke"
+    "desktop:smoke": "cd desktop && npm run smoke",
+    "launcher:mac": "bash scripts/install-mac-app.sh",
+    "launcher:win": "powershell -ExecutionPolicy Bypass -File scripts/install-windows-shortcut.ps1"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
