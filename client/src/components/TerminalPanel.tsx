@@ -86,6 +86,9 @@ function specOf(a: AgentState): ResumeSpec {
   return { sessionId: a.sessionId, name: a.customTitle, cwd: a.cwd, rootCwd: a.rootCwd, isSquire: a.isSquire };
 }
 
+/** "Go to terminal" drives Windows windows/tabs only (desktop/src/focus.ts). */
+const IS_WINDOWS = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent);
+
 /** Safe to close: Claude is waiting for the user and no background squire is still working. */
 function turnOver(a: AgentState): boolean {
   if (a.status === 'delegating') return false;
@@ -632,6 +635,23 @@ export default function TerminalPanel(props: TerminalPanelProps) {
     [bridge, releaseReady, resumeBatch, showToast],
   );
 
+  /** The card's "Move here": close this one outside claude and resume it here (after its turn, if mid-turn). */
+  const moveHere = useCallback(
+    (a: AgentState): void => {
+      setCardId(null);
+      if (!turnOver(a)) {
+        setWaiting((cur) => (cur.includes(a.sessionId) ? cur : [...cur, a.sessionId]));
+        showToast({ tone: 'ok', text: `${agentName(a)} moves here when its turn ends`, hint: null });
+        return;
+      }
+      void moveOne(a).then((ok) => {
+        const tab = ok ? tabFor(tabsRef.current, a.sessionId) : null;
+        if (tab) focusTab(tab.id);
+      });
+    },
+    [moveOne, focusTab, showToast],
+  );
+
   const handledMoveRef = useRef<MoveRequest | null>(null);
   useEffect(() => {
     if (!moveRequest || handledMoveRef.current === moveRequest) return;
@@ -1127,7 +1147,8 @@ export default function TerminalPanel(props: TerminalPanelProps) {
           <LiveSessionCard
             agent={card}
             now={now}
-            canFocus={!!bridge?.focusSession}
+            canFocus={!!bridge?.focusSession && IS_WINDOWS}
+            onMove={bridge?.releaseSession && releaseReady ? () => moveHere(card) : null}
             busy={focusBusy === card.sessionId}
             last={lastFocus?.sessionId === card.sessionId ? lastFocus.result : null}
             onGo={() => void goToTerminal(card)}
@@ -1211,9 +1232,11 @@ interface LiveSessionCardProps {
   onGo: () => void;
   onTakeOver: () => void;
   onResume: () => void;
+  /** Close the outside claude and resume the session here; null when the shell can't release. */
+  onMove: (() => void) | null;
 }
 
-function LiveSessionCard({ agent: a, now, canFocus, busy, last, onGo, onTakeOver, onResume }: LiveSessionCardProps) {
+function LiveSessionCard({ agent: a, now, canFocus, busy, last, onGo, onTakeOver, onResume, onMove }: LiveSessionCardProps) {
   const name = agentName(a);
   const color = heroColor(a.sessionId);
   const epithet = epithetOf(a.sessionId, name, a.isSquire);
@@ -1245,22 +1268,40 @@ function LiveSessionCard({ agent: a, now, canFocus, busy, last, onGo, onTakeOver
 
         {running ? (
           <>
-            <button
-              type="button"
-              className="drawer-btn drawer-btn-primary live-card-go"
-              onClick={onGo}
-              disabled={!canFocus || busy}
-              title={canFocus ? 'Bring that terminal window to the front' : 'Needs the desktop app'}
-            >
-              {busy ? 'Finding its window…' : '↗ Go to terminal'}
-            </button>
-            <div className="live-card-note">
-              {!canFocus
-                ? 'Switching windows needs the desktop app — use the taskbar for now.'
-                : last && last.ok
-                  ? `Last time: ${last.app ?? 'window'}${last.tab ? ` · tab “${bareTitle(last.tab)}”` : ''}`
-                  : 'Switches to the window (and tab) where it already runs — no second Claude.'}
-            </div>
+            {onMove && (
+              <>
+                <button
+                  type="button"
+                  className="drawer-btn drawer-btn-primary live-card-go"
+                  onClick={onMove}
+                  title="Close it in the other terminal and resume it in a village tab"
+                >
+                  ⇲ Move here
+                </button>
+                <div className="live-card-note">
+                  Closes it in the other terminal and resumes it here — one Claude, same history. Mid-turn, it waits
+                  for the turn to end.
+                </div>
+              </>
+            )}
+            {canFocus && (
+              <>
+                <button
+                  type="button"
+                  className={`drawer-btn ${onMove ? 'drawer-btn-ghost' : 'drawer-btn-primary'} live-card-go`}
+                  onClick={onGo}
+                  disabled={busy}
+                  title="Bring that terminal window to the front"
+                >
+                  {busy ? 'Finding its window…' : '↗ Go to terminal'}
+                </button>
+                <div className="live-card-note">
+                  {last && last.ok
+                    ? `Last time: ${last.app ?? 'window'}${last.tab ? ` · tab “${bareTitle(last.tab)}”` : ''}`
+                    : 'Switches to the window (and tab) where it already runs — no second Claude.'}
+                </div>
+              </>
+            )}
             <div className="live-card-alt">
               <button type="button" className="drawer-btn drawer-btn-ghost live-card-takeover" onClick={onTakeOver}>
                 Take over here
