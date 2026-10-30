@@ -26,14 +26,17 @@ cd "$ROOT"
 [ -d desktop/node_modules/electron ] || (cd desktop && npm install) >>"$LOG" 2>&1 || fail "desktop npm install failed — see $LOG"
 (cd desktop && npm run build) >>"$LOG" 2>&1 || fail "desktop build failed — see $LOG"
 
-if [ "$(uname)" = Darwin ]; then
-  ELECTRON="$ROOT/desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
-else
-  ELECTRON="$ROOT/desktop/node_modules/electron/dist/electron"
-fi
-[ -x "$ELECTRON" ] || fail "Electron binary missing — run: bun run desktop:install"
-
 echo "--- $(date) launch $*" >>"$LOG"
 # --dev = live Vite client (HMR) like `bun run desktop`; a second launch just refocuses the window.
-nohup "$ELECTRON" "$ROOT/desktop" --dev "$@" >>"$LOG" 2>&1 &
-disown
+if [ "$(uname)" = Darwin ]; then
+  # Through LaunchServices, not a nohup'd binary: macOS then treats it as a normal app
+  # (activation + keyboard focus, Dock icon, Documents access), detached from this shell.
+  BUNDLE="$ROOT/desktop/node_modules/electron/dist/Electron.app"
+  [ -d "$BUNDLE" ] || fail "Electron missing — run: bun run desktop:install"
+  open -a "$BUNDLE" --stdout "$LOG" --stderr "$LOG" --args "$ROOT/desktop" --dev "$@"
+else
+  ELECTRON="$ROOT/desktop/node_modules/electron/dist/electron"
+  [ -x "$ELECTRON" ] || fail "Electron missing — run: bun run desktop:install"
+  nohup "$ELECTRON" "$ROOT/desktop" --dev "$@" >>"$LOG" 2>&1 &
+  disown
+fi
