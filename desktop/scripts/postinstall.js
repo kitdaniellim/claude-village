@@ -23,6 +23,13 @@ function runNode(label, script, args = []) {
 runNode('electron: ensuring binary is downloaded', path.join(ROOT, 'node_modules', 'electron', 'install.js'));
 
 // 2. node-pty
+// The npm tarball ships the macOS spawn-helper without its exec bit → "posix_spawnp failed".
+if (process.platform === 'darwin') {
+  for (const arch of ['darwin-arm64', 'darwin-x64']) {
+    const helper = path.join(ROOT, 'node_modules', 'node-pty', 'prebuilds', arch, 'spawn-helper');
+    if (fs.existsSync(helper)) fs.chmodSync(helper, 0o755);
+  }
+}
 const prebuild = path.join(ROOT, 'node_modules', 'node-pty', 'prebuilds', `${process.platform}-${process.arch}`, 'pty.node');
 if (fs.existsSync(prebuild) && process.env.npm_config_build_from_source !== 'true') {
   console.log(`[desktop] node-pty: N-API prebuild found (${path.relative(ROOT, prebuild)}) — no Electron rebuild needed`);

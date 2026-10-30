@@ -31,6 +31,16 @@ const HIDDEN = argv.includes('--hidden');
 const RELAUNCH = argv.includes('--relaunch');
 
 const DESKTOP_DIR = path.resolve(__dirname, '..');
+const IS_MAC = process.platform === 'darwin';
+
+// Launched from Finder / the Dock / a LaunchAgent, macOS hands GUI apps a bare PATH
+// (/usr/bin:/bin:…) — bun, claude and the tools claude shells out to would all be missing.
+if (process.platform !== 'win32') {
+  const home = os.homedir();
+  const extra = [path.join(home, '.local', 'bin'), path.join(home, '.bun', 'bin'), '/opt/homebrew/bin', '/usr/local/bin'];
+  const have = (process.env['PATH'] ?? '').split(':').filter(Boolean);
+  process.env['PATH'] = [...have, ...extra.filter((d) => !have.includes(d))].join(':');
+}
 const CLIENT_INDEX = path.join(REPO_ROOT, 'client', 'dist', 'index.html');
 
 let win: BrowserWindow | null = null;
@@ -69,8 +79,38 @@ function loadSplash(message: string, detail = ''): void {
 
 // ── settings + login item ────────────────────────────────────────────────────
 
+const LAUNCH_AGENT = path.join(os.homedir(), 'Library', 'LaunchAgents', 'dev.rts-agents.desktop.plist');
+
+/** macOS: setLoginItemSettings would register bare Electron.app (no app dir), so write a LaunchAgent. */
+function applyMacLaunchAgent(s: DesktopSettings): void {
+  if (!s.openAtLogin) {
+    fs.rmSync(LAUNCH_AGENT, { force: true });
+    return;
+  }
+  const esc = (v: string): string => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const args = [process.execPath, DESKTOP_DIR, ...(s.startMinimized ? ['--hidden'] : [])];
+  const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>dev.rts-agents.desktop</string>
+  <key>ProgramArguments</key><array>${args.map((a) => `<string>${esc(a)}</string>`).join('')}</array>
+  <key>RunAtLoad</key><true/>
+</dict></plist>
+`;
+  try {
+    fs.mkdirSync(path.dirname(LAUNCH_AGENT), { recursive: true });
+    fs.writeFileSync(LAUNCH_AGENT, plist);
+  } catch (err) {
+    console.error('[desktop] could not write the login LaunchAgent:', (err as Error).message);
+  }
+}
+
 /** Unpackaged app: registers electron.exe + this desktop dir (+ --hidden) as the login command. */
 function applyLoginItem(s: DesktopSettings): void {
+  if (IS_MAC) {
+    applyMacLaunchAgent(s);
+    return;
+  }
   app.setLoginItemSettings({
     openAtLogin: s.openAtLogin,
     path: process.execPath,
@@ -549,6 +589,10 @@ function startApp(): void {
   });
   app.on('window-all-closed', () => {
     if (quitting) app.quit();
+  });
+  // macOS: clicking the Dock icon (or the launcher .app again) brings the hidden window back.
+  app.on('activate', () => {
+    if (win) showWindow();
   });
   void app.whenReady().then(boot);
 }

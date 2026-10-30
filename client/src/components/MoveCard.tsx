@@ -45,7 +45,7 @@ export default function MoveCard({ status, onMove, onCancel, onRestart }: MoveCa
           type="button"
           className="ui-btn move-btn"
           onClick={() => setConfirming(true)}
-          title="Close the Claude sessions running in Windows Terminal and resume them in village tabs"
+          title="Close the Claude sessions running in outside terminals and resume them in village tabs"
         >
           ⇲ Move {plural(movable, 'terminal', 'terminals')} into the village
         </button>
