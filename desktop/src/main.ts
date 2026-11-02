@@ -2,7 +2,7 @@
 // and serves the `window.rts` bridge (settings, claude path, PTYs, focus, links, restart).
 // `electron . --smoke` runs a headless self-test instead.
 
-import { app, BrowserWindow, ipcMain, Menu, shell, Tray, type MenuItem } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell, Tray, type MenuItem } from 'electron';
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -223,7 +223,27 @@ function createTray(): void {
 
 function registerIpc(): void {
   ipcMain.handle('settings:get', () => settings);
-  ipcMain.handle('settings:set', (_e, patch: unknown) => updateSettings(patch));
+  ipcMain.handle('settings:set', async (_e, patch: unknown) => {
+    // Bypass mode is only ever switched on by the person at the keyboard, through a native dialog —
+    // never by the renderer alone (it loads from a dev server and could be driven by anything).
+    const p = (patch && typeof patch === 'object' ? patch : {}) as Record<string, unknown>;
+    if (p['skipPermissions'] === true && !settings.skipPermissions) {
+      const opts = {
+        type: 'warning' as const,
+        buttons: ['Cancel', 'Skip permission prompts'],
+        defaultId: 0,
+        cancelId: 0,
+        title: 'Skip permission prompts?',
+        message: 'Start every village Claude with --dangerously-skip-permissions?',
+        detail:
+          'Claude will run tools (edit files, run commands) without asking first, in every terminal opened from now on. ' +
+          'Its status line shows "bypass permissions on" while active. You can turn this off again in ⚙ Settings.',
+      };
+      const { response } = win && !win.isDestroyed() ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+      if (response !== 1) return updateSettings({ ...p, skipPermissions: false });
+    }
+    return updateSettings(patch);
+  });
   ipcMain.handle('claude:path', () => resolveClaudePath());
 
   ipcMain.handle('pty:open', (event, raw: unknown) => {
