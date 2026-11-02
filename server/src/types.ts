@@ -183,6 +183,11 @@ export interface RallyResponse {
   serverTime: number;
 }
 
+/** GET /api/names?ids=a,b — each session's latest `/rename` from its transcript (null = never named / not found). */
+export interface NamesResponse {
+  names: Record<string, string | null>;
+}
+
 /** REST shape for GET /api/agents. */
 export interface AgentsResponse {
   agents: AgentState[];

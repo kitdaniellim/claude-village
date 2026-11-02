@@ -6,7 +6,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
-import type { AgentState, RallySession } from '../types/agent';
+import type { AgentState, NamesResponse, RallySession } from '../types/agent';
+import { serverHttpUrl } from '../hooks/useAgentSocket';
 import type { DesktopBridge, FocusSessionResult } from '../types/desktop';
 import type { FocusRequest } from './Village';
 import { TAVERN_PLACE, allPlaces, resolveAgentPlace } from '../world/registry';
@@ -741,6 +742,13 @@ export default function TerminalPanel(props: TerminalPanelProps) {
       const bound = new Set(cur.map((t) => (t.kind === 'resume' ? t.sessionId : null)));
       let changed = false;
       const next = cur.map((t) => {
+        // Keep the stored name in step with the hero's `/rename`: it is what the tab, the party's
+        // sleeper card and the saved drawer show once the hero leaves the roster (asleep / idle-dropped).
+        const linked = t.kind === 'resume' && t.sessionId ? agents.find((a) => a.sessionId === t.sessionId) : undefined;
+        if (linked?.customTitle?.trim() && agentName(linked) !== t.name) {
+          changed = true;
+          t = { ...t, name: agentName(linked) };
+        }
         // Restored tabs have no process yet — nothing to follow or adopt.
         if (t.restored) return t;
         if (t.kind === 'resume') {
@@ -794,6 +802,29 @@ export default function TerminalPanel(props: TerminalPanelProps) {
     }
   }, [tabs]);
 
+  /** Restored tabs saved under a stale name (e.g. "Nameless" before a `/rename`): ask the server for the latest. */
+  const recoverNames = useCallback(async (restored: TerminalTab[]): Promise<void> => {
+    const ids = restored.filter((t) => t.kind === 'resume' && t.sessionId).map((t) => t.sessionId as string);
+    if (ids.length === 0) return;
+    try {
+      const res = await fetch(`${serverHttpUrl()}/api/names?ids=${ids.map(encodeURIComponent).join(',')}`);
+      if (!res.ok) return;
+      const { names } = (await res.json()) as NamesResponse;
+      setTabs((cur) => {
+        let changed = false;
+        const next = cur.map((t) => {
+          const name = t.kind === 'resume' && t.sessionId ? names?.[t.sessionId] : null;
+          if (!name || name === t.name) return t;
+          changed = true;
+          return { ...t, name };
+        });
+        return changed ? next : cur;
+      });
+    } catch {
+      // server unreachable — keep the saved names
+    }
+  }, []);
+
   // ── Restart persistence (desktop only) ─────────────────────────────────────
   // Bring back the last run's tabs asleep; the active one wakes once the roster is in.
   useEffect(() => {
@@ -812,6 +843,7 @@ export default function TerminalPanel(props: TerminalPanelProps) {
         const back = restoreTabs(saved);
         const had = tabsRef.current.length > 0;
         setTabs((cur) => [...back, ...cur.filter((c) => !back.some((b) => b.id === c.id))]);
+        void recoverNames(back);
         if (!had) setActiveId((back.find((t) => t.id === saved.activeId) ?? back[0])?.id ?? null);
         cbs.current.onRestoreDrawer?.(saved.drawerOpen);
       }

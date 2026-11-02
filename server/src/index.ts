@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ServerWebSocket } from 'bun';
-import type { AgentsResponse, ServerMessage } from './types';
+import type { AgentsResponse, NamesResponse, ServerMessage } from './types';
 import { BROADCAST_THROTTLE_MS } from './types';
 import { AgentStore } from './state';
 import { Watcher } from './watcher';
@@ -91,6 +91,28 @@ function findTranscript(sessionId: string): string | null {
   }
   return null;
 }
+/** Latest `/rename` (custom-title / agent-name line) in a transcript, or null. */
+function lastSessionName(file: string): string | null {
+  let text: string;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch {
+    return null;
+  }
+  let name: string | null = null;
+  for (const line of text.split('\n')) {
+    if (!line.includes('"custom-title"') && !line.includes('"agent-name"')) continue;
+    try {
+      const o = JSON.parse(line) as { type?: unknown; customTitle?: unknown; agentName?: unknown };
+      const v = o.type === 'custom-title' ? o.customTitle : o.type === 'agent-name' ? o.agentName : null;
+      if (typeof v === 'string' && v.trim()) name = v.trim();
+    } catch {
+      // partial / foreign line
+    }
+  }
+  return name;
+}
+
 const squires = new SquireScanner(store, (id) => watcher.getSessionPath(id));
 watcher.start(); // synchronous initial scan → banner counts below are real
 live.start();
@@ -147,6 +169,22 @@ const server = Bun.serve({
     }
     if (url.pathname === '/api/rally') {
       return new Response(JSON.stringify(rally.getState()), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      });
+    }
+    if (url.pathname === '/api/names') {
+      // Sleeping drawer tabs whose sessions left the roster ask for their names back.
+      const ids = (url.searchParams.get('ids') ?? '')
+        .split(',')
+        .filter((id) => /^[\w-]{8,64}$/.test(id))
+        .slice(0, 32);
+      const body: NamesResponse = { names: {} };
+      for (const id of ids) {
+        const file = findTranscript(id);
+        body.names[id] = file ? lastSessionName(file) : null;
+      }
+      return new Response(JSON.stringify(body), {
         status: 200,
         headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
       });
