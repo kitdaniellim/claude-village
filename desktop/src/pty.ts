@@ -30,22 +30,25 @@ function isDir(p: string): boolean {
 const CODING_DIR = path.resolve(__dirname, '..', '..', '..');
 
 /**
- * The cwd, or its nearest existing ancestor inside the user's folders. Never the home folder itself
- * (Claude asks to trust home on every start) and never a path from the other OS (G:\… on the Mac):
- * those fall back to the coding folder, then home as the last resort.
+ * The cwd when it exists; otherwise its nearest existing ancestor *below* home. Never climbs to home
+ * itself (Claude asks to trust home on every start) or outside it (/tmp, /), and a path from the other
+ * OS (G:\… on the Mac) is not followed: those fall back to the coding folder, then home.
  */
 export function existingDir(p: string): string {
   const fallback = isDir(CODING_DIR) ? CODING_DIR : os.homedir();
   if (!path.isAbsolute(p)) return fallback;
   const home = path.resolve(os.homedir());
-  let dir = path.resolve(p);
-  for (;;) {
-    if (dir === home) return isDir(p) ? dir : fallback; // home only when it was asked for
+  const want = path.resolve(p);
+  if (isDir(want)) return want; // exactly what was asked for (incl. home: a session filed there resumes there)
+  // Climb only inside home — never up into /tmp, /, or another user's folder.
+  const inHome = (d: string): boolean => {
+    const rel = path.relative(home, d);
+    return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+  };
+  for (let dir = path.dirname(want); inHome(dir); dir = path.dirname(dir)) {
     if (isDir(dir)) return dir;
-    const up = path.dirname(dir);
-    if (up === dir) return fallback;
-    dir = up;
   }
+  return fallback;
 }
 
 /** Low-level spawn of any program in a ConPTY; `owner` is the webContents id (-1 = none). */
