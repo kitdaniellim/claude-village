@@ -331,6 +331,22 @@ export default function TopBar(props: TopBarProps) {
                     </label>
                   </div>
 
+                  <div className="topbar-popover-section">Claude</div>
+                  <div
+                    className={`topbar-popover-row ${desktopReady ? '' : 'topbar-popover-row-disabled'}`}
+                    title="Starts claude with --dangerously-skip-permissions: no tool-permission prompts. Applies to terminals opened from now on."
+                  >
+                    <span>Skip permission prompts</span>
+                    <label>
+                      <input
+                        type="checkbox"
+                        disabled={!desktopReady}
+                        checked={desktop.settings?.skipPermissions ?? false}
+                        onChange={(e) => desktop.update({ skipPermissions: e.target.checked })}
+                      />
+                    </label>
+                  </div>
+
                   <div className="topbar-popover-section">Sound</div>
                   <div className="topbar-popover-row">
                     <span>Sound cues</span>

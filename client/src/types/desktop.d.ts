@@ -9,6 +9,8 @@ export interface DesktopSettings {
   startMinimized: boolean;
   /** Play sound cues (turn done / error / needs you). */
   sound: boolean;
+  /** Start every claude with --dangerously-skip-permissions (no tool-permission prompts). */
+  skipPermissions: boolean;
 }
 
 export interface PtyOpenOptions {

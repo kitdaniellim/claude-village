@@ -244,14 +244,19 @@ function registerIpc(): void {
     if (typeof o.name === 'string' && o.name.trim()) opts.name = o.name;
     const sender = event.sender;
     const pty = loadPty();
-    const id = pty.openPty(opts, sender.id, {
-      onData: (ptyId, data) => {
-        if (!sender.isDestroyed()) sender.send('pty:data', ptyId, data);
+    const id = pty.openPty(
+      opts,
+      sender.id,
+      {
+        onData: (ptyId, data) => {
+          if (!sender.isDestroyed()) sender.send('pty:data', ptyId, data);
+        },
+        onExit: (ptyId, code) => {
+          if (!sender.isDestroyed()) sender.send('pty:exit', ptyId, code);
+        },
       },
-      onExit: (ptyId, code) => {
-        if (!sender.isDestroyed()) sender.send('pty:exit', ptyId, code);
-      },
-    });
+      settings.skipPermissions
+    );
     return { id, pid: pty.ptyPid(id) ?? undefined };
   });
   ipcMain.on('pty:write', (_e, id: string, data: string) => {

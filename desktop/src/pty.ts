@@ -4,6 +4,7 @@
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
+import * as path from 'node:path';
 import * as nodePty from 'node-pty';
 import type { PtyOpenOptions } from '../../client/src/types/desktop';
 import { resolveClaudePath } from './claude';
@@ -25,6 +26,28 @@ function isDir(p: string): boolean {
   }
 }
 
+/** The coding folder this repo lives in (…/coding/rts-agents/desktop/dist → …/coding): trusted, unlike home. */
+const CODING_DIR = path.resolve(__dirname, '..', '..', '..');
+
+/**
+ * The cwd, or its nearest existing ancestor inside the user's folders. Never the home folder itself
+ * (Claude asks to trust home on every start) and never a path from the other OS (G:\… on the Mac):
+ * those fall back to the coding folder, then home as the last resort.
+ */
+export function existingDir(p: string): string {
+  const fallback = isDir(CODING_DIR) ? CODING_DIR : os.homedir();
+  if (!path.isAbsolute(p)) return fallback;
+  const home = path.resolve(os.homedir());
+  let dir = path.resolve(p);
+  for (;;) {
+    if (dir === home) return isDir(p) ? dir : fallback; // home only when it was asked for
+    if (isDir(dir)) return dir;
+    const up = path.dirname(dir);
+    if (up === dir) return fallback;
+    dir = up;
+  }
+}
+
 /** Low-level spawn of any program in a ConPTY; `owner` is the webContents id (-1 = none). */
 export function spawnPty(
   file: string,
@@ -34,7 +57,7 @@ export function spawnPty(
   owner = -1
 ): string {
   const id = `pty-${++seq}-${Date.now().toString(36)}`;
-  const cwd = isDir(opts.cwd) ? opts.cwd : os.homedir();
+  const cwd = existingDir(opts.cwd);
   // Launched from inside a Claude Code session, the app inherits that session's env
   // (CLAUDE_CODE_SESSION_ID would make a fresh claude adopt the parent's session!) —
   // strip every CLAUDE* var except the config-dir override.
@@ -68,7 +91,7 @@ function safeName(name: string): string {
 }
 
 /** Bridge-facing open: `shell` → powershell/$SHELL, otherwise claude [--resume id [--fork-session]] [--name n]. */
-export function openPty(opts: PtyOpenOptions, owner: number, cb: PtyCallbacks): string {
+export function openPty(opts: PtyOpenOptions, owner: number, cb: PtyCallbacks, skipPermissions = false): string {
   let file: string;
   const args: string[] = [];
   if (opts.shell) {
@@ -77,6 +100,7 @@ export function openPty(opts: PtyOpenOptions, owner: number, cb: PtyCallbacks): 
     const claude = resolveClaudePath();
     if (!claude) throw new Error('Claude Code binary not found (expected ~/.local/bin/claude or on PATH)');
     file = claude;
+    if (skipPermissions) args.push('--dangerously-skip-permissions');
     if (opts.resumeSessionId) {
       args.push('--resume', opts.resumeSessionId);
       if (opts.fork) args.push('--fork-session');

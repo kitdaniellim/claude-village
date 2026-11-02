@@ -2,10 +2,10 @@
 // friendly activity verbs, relative time and the by-hand launch commands.
 
 import type { AgentState } from '../types/agent';
-import { TAVERN_PLACE, resolveAgentPlace } from '../world/registry';
+import { CODING_ROOT, TAVERN_PLACE, resolveAgentPlace } from '../world/registry';
 
 /** Where terminals start when a session never reported a cwd. */
-export const FALLBACK_CWD = 'G:\\daniels things\\coding';
+export const FALLBACK_CWD = CODING_ROOT;
 
 /** Every session the user hasn't /renamed; also the `--name` new sessions launch with. */
 export const NAMELESS = 'Nameless';

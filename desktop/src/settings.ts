@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS: DesktopSettings = {
   openAtLogin: false,
   startMinimized: false,
   sound: true,
+  skipPermissions: false,
 };
 
 export function settingsPath(): string {
@@ -24,6 +25,7 @@ export function sanitizeSettings(base: DesktopSettings, patch: unknown): Desktop
     openAtLogin: bool('openAtLogin'),
     startMinimized: bool('startMinimized'),
     sound: bool('sound'),
+    skipPermissions: bool('skipPermissions'),
   };
 }
 

@@ -42,8 +42,15 @@ export interface ResolvedPlace {
   repo: RepoDef | null;
 }
 
-const CODING_ROOT = 'G:\\daniels things\\coding';
-const SIF_ROOT = `${CODING_ROOT}\\work\\SIF FW`;
+const IS_MAC = typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent);
+/** Path separator of the machine the app runs on (repo cwds below are launch dirs, so they must be real). */
+const SEP = IS_MAC ? '/' : '\\';
+const join = (...parts: string[]): string => parts.join(SEP);
+
+/** The folder every project lives under — Windows box vs the Mac (both are the user's machines). */
+export const CODING_ROOT = IS_MAC ? '/Users/kitdaniellim/Documents/coding' : 'G:\\daniels things\\coding';
+// The Mac clone keeps the SIF repos straight under coding/.
+const SIF_ROOT = IS_MAC ? CODING_ROOT : join(CODING_ROOT, 'work', 'SIF FW');
 
 export const PLACES: PlaceDef[] = [
   {
@@ -53,13 +60,13 @@ export const PLACES: PlaceDef[] = [
     tagline: 'The walled city of Sports In Focus',
     match: ['SIF FW'],
     repos: [
-      { id: 'flashworks', name: 'FlashWorks', match: ['flashworks-framework-v2'], cwd: `${SIF_ROOT}\\flashworks-framework-v2` },
-      { id: 'sif-external', name: 'External API', match: ['sif-external-api'], cwd: `${SIF_ROOT}\\sif-external-api` },
-      { id: 'sif-uploader', name: 'Photographer Tool', match: ['photographer-uploader-v2'], cwd: `${SIF_ROOT}\\photographer-uploader-v2` },
-      { id: 'sif-old', name: 'Old Portal', match: ['sportsinfocus.com.au_v2'], cwd: `${SIF_ROOT}\\sportsinfocus.com.au_v2` },
-      { id: 'sif-events', name: 'Event Management', match: ['event-management-app-v2'], cwd: `${SIF_ROOT}\\event-management-app-v2` },
-      { id: 'sif-checkin', name: 'Check-in App', match: ['sif-checkin-app'], cwd: `${SIF_ROOT}\\sif-checkin-app` },
-      { id: 'sif-photos', name: 'Individual Photos', match: ['individual-photo-system'], cwd: `${SIF_ROOT}\\individual-photo-system` },
+      { id: 'flashworks', name: 'FlashWorks', match: ['flashworks-framework-v2'], cwd: join(SIF_ROOT, 'flashworks-framework-v2') },
+      { id: 'sif-external', name: 'External API', match: ['sif-external-api'], cwd: join(SIF_ROOT, 'sif-external-api') },
+      { id: 'sif-uploader', name: 'Photographer Tool', match: ['photographer-uploader-v2'], cwd: join(SIF_ROOT, 'photographer-uploader-v2') },
+      { id: 'sif-old', name: 'Old Portal', match: ['sportsinfocus.com.au_v2'], cwd: join(SIF_ROOT, 'sportsinfocus.com.au_v2') },
+      { id: 'sif-events', name: 'Event Management', match: ['event-management-app-v2'], cwd: join(SIF_ROOT, 'event-management-app-v2') },
+      { id: 'sif-checkin', name: 'Check-in App', match: ['sif-checkin-app'], cwd: join(SIF_ROOT, 'sif-checkin-app') },
+      { id: 'sif-photos', name: 'Individual Photos', match: ['individual-photo-system'], cwd: join(SIF_ROOT, 'individual-photo-system') },
     ],
   },
   {
@@ -70,10 +77,10 @@ export const PLACES: PlaceDef[] = [
     match: ['HABITS'],
     titleMatch: ['habits', 'lovable', 'collegiate', 'pixel perfect', 'hr hub', 'bm360', 'affinity', 'internal portal', 'h365'],
     repos: [
-      { id: 'habits-internal', name: 'Internal Portal', match: ['HABITS', 'internal'], cwd: `${CODING_ROOT}\\work\\HABITS`, titleMatch: ['internal', 'h365'] },
-      { id: 'habits-collegiate', name: 'Collegiate', match: ['HABITS', 'collegiate'], cwd: `${CODING_ROOT}\\work\\HABITS`, titleMatch: ['collegiate', 'bm360', 'affinity', 'licens'] },
-      { id: 'habits-pixel', name: 'Pixel Perfect', match: ['HABITS', 'pixel'], cwd: `${CODING_ROOT}\\work\\HABITS`, titleMatch: ['pixel'] },
-      { id: 'habits-hr', name: 'HR Hub', match: ['HABITS', 'hr'], cwd: `${CODING_ROOT}\\work\\HABITS`, titleMatch: ['hr hub', 'hr portal', 'hrms'] },
+      { id: 'habits-internal', name: 'Internal Portal', match: ['HABITS', 'internal'], cwd: join(CODING_ROOT, 'work', 'HABITS'), titleMatch: ['internal', 'h365'] },
+      { id: 'habits-collegiate', name: 'Collegiate', match: ['HABITS', 'collegiate'], cwd: join(CODING_ROOT, 'work', 'HABITS'), titleMatch: ['collegiate', 'bm360', 'affinity', 'licens'] },
+      { id: 'habits-pixel', name: 'Pixel Perfect', match: ['HABITS', 'pixel'], cwd: join(CODING_ROOT, 'work', 'HABITS'), titleMatch: ['pixel'] },
+      { id: 'habits-hr', name: 'HR Hub', match: ['HABITS', 'hr'], cwd: join(CODING_ROOT, 'work', 'HABITS'), titleMatch: ['hr hub', 'hr portal', 'hrms'] },
     ],
   },
   {
@@ -83,10 +90,10 @@ export const PLACES: PlaceDef[] = [
     tagline: 'The catering dungeon — beware the egress',
     match: ['momma-mia-catering-website'],
     repos: [
-      { id: 'momma-web', name: 'Web', match: ['momma-mia-catering-website', 'web'], cwd: `${CODING_ROOT}\\momma-mia-catering-website\\apps\\web` },
-      { id: 'momma-mobile', name: 'Mobile', match: ['momma-mia-catering-website', 'mobile'], cwd: `${CODING_ROOT}\\momma-mia-catering-website\\apps\\mobile` },
-      { id: 'momma-supabase', name: 'Supabase', match: ['momma-mia-catering-website', 'supabase'], cwd: `${CODING_ROOT}\\momma-mia-catering-website\\supabase` },
-      { id: 'momma-root', name: 'Monorepo', match: ['momma-mia-catering-website'], cwd: `${CODING_ROOT}\\momma-mia-catering-website` },
+      { id: 'momma-web', name: 'Web', match: ['momma-mia-catering-website', 'web'], cwd: join(CODING_ROOT, 'momma-mia-catering-website', 'apps', 'web') },
+      { id: 'momma-mobile', name: 'Mobile', match: ['momma-mia-catering-website', 'mobile'], cwd: join(CODING_ROOT, 'momma-mia-catering-website', 'apps', 'mobile') },
+      { id: 'momma-supabase', name: 'Supabase', match: ['momma-mia-catering-website', 'supabase'], cwd: join(CODING_ROOT, 'momma-mia-catering-website', 'supabase') },
+      { id: 'momma-root', name: 'Monorepo', match: ['momma-mia-catering-website'], cwd: join(CODING_ROOT, 'momma-mia-catering-website') },
     ],
   },
   {
@@ -96,8 +103,8 @@ export const PLACES: PlaceDef[] = [
     tagline: "The dragon's lair — brand outreach & media kit",
     match: ['simone'],
     repos: [
-      { id: 'brand-outreach-studio', name: 'Outreach Studio', match: ['brand-outreach-studio'], cwd: `${CODING_ROOT}\\simone\\brand-outreach-studio` },
-      { id: 'newsance', name: 'Newsance', match: ['newsance'], cwd: `${CODING_ROOT}\\simone\\newsance` },
+      { id: 'brand-outreach-studio', name: 'Outreach Studio', match: ['brand-outreach-studio'], cwd: join(CODING_ROOT, 'simone', 'brand-outreach-studio') },
+      { id: 'newsance', name: 'Newsance', match: ['newsance'], cwd: join(CODING_ROOT, 'simone', 'newsance') },
     ],
   },
   {
@@ -107,7 +114,7 @@ export const PLACES: PlaceDef[] = [
     tagline: 'A lone tower on the hill',
     match: ['My Portfolio'],
     landmark: 'tower',
-    repos: [{ id: 'my-portfolio', name: 'my-portfolio', match: ['my-portfolio'], cwd: `${CODING_ROOT}\\My Portfolio\\my-portfolio` }],
+    repos: [{ id: 'my-portfolio', name: 'my-portfolio', match: ['my-portfolio'], cwd: join(CODING_ROOT, 'My Portfolio', 'my-portfolio') }],
   },
   {
     id: 'rts-agents',
@@ -116,7 +123,7 @@ export const PLACES: PlaceDef[] = [
     tagline: 'This very dashboard',
     match: ['rts-agents'],
     landmark: 'cottage',
-    repos: [{ id: 'rts-agents', name: 'rts-agents', match: ['rts-agents'], cwd: `${CODING_ROOT}\\rts-agents` }],
+    repos: [{ id: 'rts-agents', name: 'rts-agents', match: ['rts-agents'], cwd: join(CODING_ROOT, 'rts-agents') }],
   },
 ];
 
