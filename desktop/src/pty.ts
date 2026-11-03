@@ -30,16 +30,19 @@ function isDir(p: string): boolean {
 const CODING_DIR = path.resolve(__dirname, '..', '..', '..');
 
 /**
- * The cwd when it exists; otherwise its nearest existing ancestor *below* home. Never climbs to home
- * itself (Claude asks to trust home on every start) or outside it (/tmp, /), and a path from the other
- * OS (G:\… on the Mac) is not followed: those fall back to the coding folder, then home.
+ * The cwd when it exists; otherwise its nearest existing ancestor *below* home. Never home itself
+ * (Claude asks to trust home on every start) and never outside it (/tmp, /); a path from the other
+ * OS (G:\… on the Mac) is not followed. Those all fall back to the coding folder, then home.
  */
 export function existingDir(p: string): string {
   const fallback = isDir(CODING_DIR) ? CODING_DIR : os.homedir();
   if (!path.isAbsolute(p)) return fallback;
   const home = path.resolve(os.homedir());
   const want = path.resolve(p);
-  if (isDir(want)) return want; // exactly what was asked for (incl. home: a session filed there resumes there)
+  // Home itself never: Claude asks to trust it on every start (it never remembers that), and
+  // `claude --resume` still finds a session filed under home when started from the coding folder.
+  if (want === home) return fallback;
+  if (isDir(want)) return want;
   // Climb only inside home — never up into /tmp, /, or another user's folder.
   const inHome = (d: string): boolean => {
     const rel = path.relative(home, d);
