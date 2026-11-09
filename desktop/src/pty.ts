@@ -58,7 +58,7 @@ export function existingDir(p: string): string {
 export function spawnPty(
   file: string,
   args: string[],
-  opts: { cwd: string; cols: number; rows: number },
+  opts: { cwd: string; cols: number; rows: number; env?: Record<string, string> },
   cb: PtyCallbacks,
   owner = -1
 ): string {
@@ -79,7 +79,7 @@ export function spawnPty(
     cols: opts.cols > 0 ? opts.cols : 80,
     rows: opts.rows > 0 ? opts.rows : 24,
     cwd,
-    env: cleanEnv(),
+    env: { ...cleanEnv(), ...opts.env },
     useConpty: true,
   });
   ptys.set(id, { pty, owner });
@@ -90,6 +90,11 @@ export function spawnPty(
   });
   return id;
 }
+
+const RESUME_FULL_ENV: Record<string, string> = {
+  CLAUDE_CODE_RESUME_THRESHOLD_MINUTES: String(100 * 365 * 24 * 60),
+  CLAUDE_CODE_RESUME_TOKEN_THRESHOLD: String(1e12),
+};
 
 /** `--name` value: node-pty quotes each argv entry itself, so only drop what can't be in a name. */
 function safeName(name: string): string {
@@ -114,7 +119,10 @@ export function openPty(opts: PtyOpenOptions, owner: number, cb: PtyCallbacks, s
     const name = opts.name ? safeName(opts.name) : '';
     if (name) args.push('--name', name);
   }
-  return spawnPty(file, args, { cwd: opts.cwd, cols: opts.cols, rows: opts.rows }, cb, owner);
+  // Waking a tab means "carry on": Claude Code otherwise stops a long, old session (> 70 min, > 100k
+  // tokens) to ask "Resume from summary / full session?". Lift both limits out of reach for our resumes.
+  const env = opts.resumeSessionId && !opts.shell ? RESUME_FULL_ENV : undefined;
+  return spawnPty(file, args, { cwd: opts.cwd, cols: opts.cols, rows: opts.rows, env }, cb, owner);
 }
 
 /** Pids of every process we spawned — never released by "Move into the village". */
