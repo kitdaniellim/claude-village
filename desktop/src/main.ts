@@ -391,6 +391,7 @@ function flushRendererStorage(): void {
 // ── boot ─────────────────────────────────────────────────────────────────────
 
 async function boot(): Promise<void> {
+  console.log(`[desktop] ${new Date().toISOString()} start pid ${process.pid}${RELAUNCH ? ' (relaunch)' : ''}`);
   settings = loadSettings();
   if (settings.openAtLogin) applyLoginItem(settings); // keep the registry entry's path current
   registerIpc();
@@ -506,6 +507,7 @@ function rebuildShell(): Promise<{ ok: boolean; output: string }> {
 async function restartApp(): Promise<void> {
   if (restarting) return;
   restarting = true;
+  console.log(`[desktop] ${new Date().toISOString()} restart requested — relaunching`);
   if (win && !win.isDestroyed() && !win.isVisible()) showWindow();
   // The renderer saves its tabs on every change (localStorage + tabs:save); flush before the splash unloads it.
   flushRendererStorage();
@@ -605,6 +607,7 @@ function startApp(): void {
     void loadVillage(argv.includes('--dev'));
   });
   app.on('before-quit', () => {
+    if (!restarting) console.log(`[desktop] ${new Date().toISOString()} quit (tray Quit / Cmd+Q / logout)`);
     quitting = true;
     flushRendererStorage();
   });
