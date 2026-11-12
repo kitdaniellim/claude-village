@@ -75,7 +75,7 @@ export const PLACES: PlaceDef[] = [
     kind: 'city',
     tagline: 'City of the Lovable portals',
     match: ['HABITS'],
-    titleMatch: ['habits', 'lovable', 'collegiate', 'pixel perfect', 'hr hub', 'bm360', 'affinity', 'internal portal', 'h365'],
+    titleMatch: ['habits', 'lovable', 'collegiate', 'pixel', 'hr hub', 'bm360', 'affinity', 'internal portal', 'h365', 'kgh', 'shopify'],
     repos: [
       { id: 'habits-internal', name: 'Internal Portal', match: ['HABITS', 'internal'], cwd: join(CODING_ROOT, 'work', 'HABITS'), titleMatch: ['internal', 'h365'] },
       { id: 'habits-collegiate', name: 'Collegiate', match: ['HABITS', 'collegiate'], cwd: join(CODING_ROOT, 'work', 'HABITS'), titleMatch: ['collegiate', 'bm360', 'affinity', 'licens'] },
@@ -122,6 +122,7 @@ export const PLACES: PlaceDef[] = [
     kind: 'wild',
     tagline: 'This very dashboard',
     match: ['rts-agents'],
+    titleMatch: ['village', 'rts-agents', 'rts agents'],
     landmark: 'cottage',
     repos: [{ id: 'rts-agents', name: 'rts-agents', match: ['rts-agents'], cwd: join(CODING_ROOT, 'rts-agents') }],
   },
@@ -166,7 +167,8 @@ export function loadWildPlaces(): WildPlace[] {
             typeof p === 'object' &&
             p !== null &&
             typeof (p as WildPlace).cwd === 'string' &&
-            !isScratchCwd((p as WildPlace).cwd) // drops the old "Temp" landmark
+            !isScratchCwd((p as WildPlace).cwd) && // drops the old "Temp" landmark
+            !isRootCwd((p as WildPlace).cwd) // and a "coding" camp saved before the Mac root was known
         )
       : [];
   } catch {

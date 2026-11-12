@@ -2,7 +2,7 @@
 // (castle / skull / flame / mug / pine / tent).
 
 import type { PlaceDef } from '../world/registry';
-import { WILDERNESS_PLACE } from '../utils/rewards';
+import { HANDOFFS_PLACE, WILDERNESS_PLACE } from '../utils/rewards';
 
 // ── Place kind glyphs (12×12, currentColor; same pixel grammar as PixelIcon) ──
 
@@ -91,6 +91,20 @@ const KIND_GLYPHS = {
     '############',
     '............',
   ],
+  scroll: [
+    '.#########..',
+    '#.........#.',
+    '.#########.#',
+    '..#.......#.',
+    '..#.#####.#.',
+    '..#.......#.',
+    '..#.####..#.',
+    '..#.......#.',
+    '..#.#####.#.',
+    '.#########.#',
+    '#.........#.',
+    '.#########..',
+  ],
 } as const;
 
 type KindGlyph = keyof typeof KIND_GLYPHS;
@@ -117,6 +131,7 @@ const KIND_PATHS = Object.fromEntries(
 ) as Record<KindGlyph, string>;
 
 function glyphFor(place: PlaceDef): KindGlyph {
+  if (place.id === HANDOFFS_PLACE.id) return 'scroll';
   return place.id === WILDERNESS_PLACE.id ? 'camp' : place.kind;
 }
 

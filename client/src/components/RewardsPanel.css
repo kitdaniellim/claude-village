@@ -649,3 +649,52 @@
   color: #3b2a14;
   text-decoration: underline;
 }
+
+.rp-kind-scroll {
+  color: #e7d9ad;
+}
+
+/* Popover footer: a single line of who / where / when / item. */
+.bp-pop-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px dashed #b39a64;
+  font-size: var(--fs-xs);
+  color: #5d4524;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.bp-pop-meta .bp-pop-portrait {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+}
+
+.bp-pop-meta .bp-pop-name {
+  font-weight: 800;
+  color: #2d2314;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bp-pop-meta .bp-pop-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bp-pop-meta .bp-pop-rel {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.bp-pop-meta .bp-pop-found {
+  flex: 0 0 auto;
+  display: inline-flex;
+}

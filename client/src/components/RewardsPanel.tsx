@@ -16,13 +16,16 @@ import {
   entryHome,
   entryName,
   groupProjects,
+  HANDOFFS_PLACE,
   homeLabel,
   lookupItem,
+  NO_CHIP_PLACES,
   projectHomes,
   projectList,
   relTime,
 } from '../utils/rewards';
 import { heroColor } from '../utils/spriteMapper';
+import { allPlaces } from '../world/registry';
 import { BagIcon, PixelIcon } from './PixelIcon';
 import BackpackView from './BackpackView';
 import type { BackpackMode } from './BackpackView';
@@ -89,6 +92,14 @@ export default function RewardsPanel(props: RewardsPanelProps) {
     return m;
   }, [journal, homes]);
 
+  // Chips follow where entries actually landed (by session name too), not their raw folders.
+  const chipPlaces = useMemo(() => {
+    const subsOf = new Map(places.map((g) => [g.place.id, g.subs]));
+    return [...allPlaces(), HANDOFFS_PLACE]
+      .filter((pl) => !NO_CHIP_PLACES.has(pl.id) && (chipCounts.get(pl.id) ?? 0) > 0)
+      .map((place) => ({ place, subs: subsOf.get(place.id) ?? [] }));
+  }, [places, chipCounts]);
+
   const entries = useMemo(
     () => (placeFilter === null ? journal : journal.filter((j) => entryHome(j, homes).place.id === placeFilter)),
     [journal, homes, placeFilter],
@@ -99,8 +110,8 @@ export default function RewardsPanel(props: RewardsPanelProps) {
   // (Only once the log has loaded — before that every saved filter would look pruned.)
   useEffect(() => {
     if (!rewards || places.length === 0) return;
-    if (placeFilter !== null && !places.some((g) => g.place.id === placeFilter)) setPlaceFilter(null);
-  }, [rewards, places, placeFilter, setPlaceFilter]);
+    if (placeFilter !== null && !chipPlaces.some((g) => g.place.id === placeFilter)) setPlaceFilter(null);
+  }, [rewards, places, chipPlaces, placeFilter, setPlaceFilter]);
 
   // New filter, mode or reopen starts at the top.
   useEffect(() => {
@@ -223,16 +234,14 @@ export default function RewardsPanel(props: RewardsPanelProps) {
           >
             All <span className="ui-chip-n">{total}</span>
           </button>
-          {places
-            .filter(({ place }) => (chipCounts.get(place.id) ?? 0) > 0)
-            .map(({ place, subs }) => (
+          {chipPlaces.map(({ place, subs }) => (
               <button
                 key={place.id}
                 type="button"
                 className={`ui-chip rp-chip ${placeFilter === place.id ? 'ui-chip-on' : ''}`}
                 aria-pressed={placeFilter === place.id}
                 onClick={() => setPlaceFilter((cur) => (cur === place.id ? null : place.id))}
-                title={`${place.name}: ${subs.map((s) => s.name).join(', ')}`}
+                title={subs.length > 0 ? `${place.name}: ${subs.map((s) => s.name).join(', ')}` : place.tagline}
               >
                 <PlaceKindIcon place={place} />
                 <span className="rp-chip-text">{place.name}</span>
@@ -310,6 +319,9 @@ function EntryPopover({ hover, panel, catalog, homes, agents, now, onEnter, onLe
   const name = entryName(j, agents);
   const full = j.summary ? cleanSummary(j.summary) : null;
   const gist = j.summary ? conciseSummary(j.summary) : null;
+  // Offer the full text only when it says noticeably more than the gist.
+  const words = (t: string | null): number => (t ? t.split(/\s+/).filter(Boolean).length : 0);
+  const hasMore = full !== null && words(full) > words(gist) + 8;
   const [expanded, setExpanded] = useState(false);
   const body = expanded ? full : gist;
 
@@ -349,33 +361,33 @@ function EntryPopover({ hover, panel, catalog, homes, agents, now, onEnter, onLe
       role="tooltip"
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
+      // Keep focus on the hovered row: a blur there would close this popover mid-click.
+      onMouseDown={(e) => {
+        e.preventDefault();
+        onEnter();
+      }}
     >
-      <div className="bp-pop-kicker">Task resolution</div>
       <div className={`bp-pop-text ${body ? '' : 'bp-pop-text-none'} ${expanded ? 'bp-pop-text-full' : ''}`}>
         {body ?? 'The hero finished without a closing word.'}
       </div>
-      {full && gist !== full && (
+      {hasMore && (
         <button type="button" className="bp-pop-more" onClick={() => setExpanded((v) => !v)}>
           {expanded ? 'Show less ▴' : 'Show full ▾'}
         </button>
       )}
-      <div className="bp-pop-who">
+      {/* One line: who · where · when · what they found. The exact date is in the tooltip. */}
+      <div className="bp-pop-meta">
         <Portrait sessionId={j.sessionId} color={heroColor(j.sessionId)} className="bp-pop-portrait" />
-        <span className="bp-pop-id">
-          <span className="bp-pop-name">{name}</span>
-          <span className="bp-pop-place">
-            <PlaceKindIcon place={home.place} />
-            {homeLabel(home, j.project)}
-          </span>
+        <span className="bp-pop-name">{name}</span>
+        <span className="bp-pop-place">
+          <PlaceKindIcon place={home.place} />
+          {home.repo?.name ?? home.place.name}
         </span>
-      </div>
-      <div className="bp-pop-foot">
-        <time dateTime={d.toISOString()}>
-          {when} <span className="bp-pop-rel">({relTime(j.ts, now)})</span>
+        <time className="bp-pop-rel" dateTime={d.toISOString()} title={when}>
+          {relTime(j.ts, now)}
         </time>
-        <span className="bp-pop-found">
+        <span className="bp-pop-found" title={`found: ${item.name}`}>
           <ItemIcon itemId={item.id} scale={1} className="bp-pop-item" />
-          found: {item.name}
         </span>
       </div>
     </div>,

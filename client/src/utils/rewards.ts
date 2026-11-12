@@ -2,7 +2,7 @@
 // project → place/repo resolution, date grouping and relative times.
 
 import type { ItemDef, JournalEntry, RewardsState } from '../types/agent';
-import { allPlaces, isRootCwd, isScratchCwd, resolvePlace, TAVERN_PLACE } from '../world/registry';
+import { allPlaces, isRootCwd, isScratchCwd, PLACES, resolvePlace, TAVERN_PLACE } from '../world/registry';
 import type { PlaceDef, RepoDef } from '../world/registry';
 
 /** Placeholder for ids the catalog no longer knows. */
@@ -114,9 +114,44 @@ export function homeLabel(home: ProjectHome, project: string): string {
 }
 
 /** Resolve a journal entry's home, preferring the per-project cache. */
-export function entryHome(j: JournalEntry, homes: Map<string, ProjectHome>): ProjectHome {
-  return homes.get(j.project) ?? resolveProjectHome(j.project, j.cwd);
+/** Handoff docs (`/handoff`, handoffs/…) get their own shelf in the backpack. */
+export const HANDOFFS_PLACE: PlaceDef = {
+  id: 'handoffs',
+  name: 'Handoffs',
+  kind: 'wild',
+  tagline: 'Sessions handed over to the next one',
+  match: [],
+  repos: [],
+};
+
+const HANDOFF_RE = /(^|[\\/])handoffs?([\\/]|$)/i;
+
+/** A place by the session name / project name keywords (PIXEL PERF → HABITS · Pixel Perfect). */
+function homeByTitle(text: string): ProjectHome | null {
+  const t = text.toLowerCase();
+  if (!t.trim()) return null;
+  for (const place of PLACES) {
+    if (!place.titleMatch?.some((w) => t.includes(w.toLowerCase()))) continue;
+    const repo = place.repos.find((r) => r.titleMatch?.some((w) => t.includes(w.toLowerCase()))) ?? null;
+    return { place, repo, onMap: true };
+  }
+  return null;
 }
+
+/**
+ * Where a quest-log entry belongs. The folder decides when it names a project; sessions run from
+ * the coding root (most of them on the Mac) or a scratch folder are filed by their session name,
+ * and handoff runs get the Handoffs shelf. What's left stays Tavern / Wilderness (All only).
+ */
+export function entryHome(j: JournalEntry, homes: Map<string, ProjectHome>): ProjectHome {
+  const base = homes.get(j.project) ?? resolveProjectHome(j.project, j.cwd);
+  if (base.place.id !== TAVERN_PLACE.id && base.place.id !== WILDERNESS_PLACE.id) return base;
+  if (HANDOFF_RE.test(j.project) || HANDOFF_RE.test(j.cwd ?? '')) return { place: HANDOFFS_PLACE, repo: null, onMap: false };
+  return homeByTitle(`${j.sessionName ?? ''} ${j.project}`) ?? base;
+}
+
+/** Places that never get a filter chip: their entries are the leftovers, shown under All. */
+export const NO_CHIP_PLACES = new Set([TAVERN_PLACE.id, WILDERNESS_PLACE.id]);
 
 export interface RewardsSubGroup {
   key: string;
