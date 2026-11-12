@@ -81,6 +81,8 @@ export interface SleepingHero {
   squire: boolean;
   /** Restored and not started yet (false = its claude is starting up). */
   asleep: boolean;
+  /** A Create Party / Fetch Squire launch whose hero hasn't appeared yet (sessionId is `tab:<id>`). */
+  launching?: boolean;
 }
 
 const KINDS: readonly string[] = ['resume', 'new', 'fork'];

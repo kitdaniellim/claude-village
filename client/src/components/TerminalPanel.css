@@ -71,6 +71,25 @@
   box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.4);
 }
 
+/* Left: what the drawer shows when it isn't a terminal (chooser / elsewhere card). */
+.drawer-strip-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drawer-strip > .drawer-actions {
+  padding: 0 var(--sp-2);
+}
+
 .drawer-strip-tools {
   flex: 0 0 auto;
   display: flex;
@@ -316,7 +335,8 @@
   margin-left: auto;
 }
 
-.drawer-session .drawer-btn {
+.drawer-session .drawer-btn,
+.drawer-strip .drawer-btn {
   padding: 5px 8px;
 }
 

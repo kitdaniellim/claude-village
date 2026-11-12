@@ -339,7 +339,9 @@
 
 /* Basis 0: the branch only takes what the place leaves over. */
 .party-branch {
-  flex: 1 1 0;
+  display: block;
+  font-size: var(--fs-xs);
+  white-space: nowrap;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -487,4 +489,135 @@
 }
 .party-card-sleeper .party-flavor {
   white-space: normal;
+}
+
+/* ── Order, drag, dismiss ──────────────────────────────────────────────────── */
+
+/* One draggable slot per top-level card (squires ride along under their parent). */
+.party-slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.party-slot[draggable='true'] > .party-card {
+  cursor: grab;
+}
+
+.party-slot-dragging {
+  opacity: 0.45;
+}
+
+/* Where the dragged card will land: a gold line above / below the target. */
+.party-slot-drop-before::before,
+.party-slot-drop-after::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 3px;
+  background: var(--gold);
+  box-shadow: 0 0 6px var(--gold-glow);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.party-slot-drop-before::before {
+  top: -4px;
+}
+
+.party-slot-drop-after::after {
+  bottom: -4px;
+}
+
+/* Hover ✕ in the card's top-right corner. */
+.party-dismiss {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-3);
+  background: var(--bg-2);
+  border: 1px solid var(--line-3);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.party-slot:hover > .party-dismiss,
+.party-slot-kid:hover > .party-dismiss,
+.party-dismiss:focus-visible {
+  opacity: 1;
+}
+
+.party-dismiss:hover {
+  color: #f87171;
+  border-color: #f87171;
+}
+
+.party-dismiss-confirm {
+  position: absolute;
+  inset: auto 4px 4px 4px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  font-size: var(--fs-xs);
+  color: var(--text-0);
+  background: var(--bg-1);
+  border: 1px solid #f87171;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.party-dismiss-confirm > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.party-dismiss-yes {
+  color: #fecaca;
+  border-color: #f87171;
+}
+
+/* ── Your turn: the status pill itself lights up (no separate chip) ─────────── */
+
+.party-pill-yourturn {
+  color: var(--bg-1) !important;
+  background: var(--gold) !important;
+  border-color: var(--gold-hi) !important;
+  box-shadow: 0 0 8px var(--gold-glow);
+  animation: party-yourturn-pulse 2.4s ease-in-out infinite;
+}
+
+.party-pill-yourturn .party-dot {
+  background: var(--bg-1) !important;
+}
+
+.party-card-yourturn {
+  border-left-color: var(--gold);
+}
+
+@keyframes party-yourturn-pulse {
+  50% {
+    box-shadow: 0 0 2px var(--gold-glow);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .party-pill-yourturn {
+    animation: none;
+  }
 }

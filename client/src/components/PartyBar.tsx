@@ -1,11 +1,13 @@
-// Left "Party" panel: one compact card per agent (active first, squires under
-// their parent) showing the friendly bits — ids and raw tool detail live in the
-// tooltip; the filter still matches them. Click → select (village + drawer).
+// Left "Party" panel — also the terminal list: one compact card per agent, in the order the user
+// drags them into (new heroes join at the bottom; nothing re-sorts itself), squires under their
+// parent. Ids and raw tool detail live in the tooltip; the filter still matches them.
+// Click → select (village + drawer switches to its terminal). Hover ✕ → dismiss (ends the session).
 // "Create Party" at the top opens a fresh Nameless terminal (choose the project from inside Claude).
 // Restored terminal tabs whose hero the server does not list yet get a dimmed placeholder card.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react';
+import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject } from 'react';
+import { usePersistentState } from '../hooks/usePersistentState';
 import type { AgentState, AgentStatus, RallySession, SquireInfo } from '../types/agent';
 import type { Rally } from '../hooks/useRally';
 import RallyCard from './RallyCard';
@@ -48,61 +50,38 @@ interface PartyBarProps {
   onMove?: () => void;
   onCancelMove?: () => void;
   onRestartApp?: (() => void) | null;
+  /** ✕ confirmed on a card: end that session and drop it from the party. */
+  onDismiss?: (sessionId: string) => void;
 }
 
-const STATUS_RANK: Record<AgentStatus, number> = {
-  running: 0,
-  thinking: 0,
-  delegating: 0,
-  error: 1,
-  done: 2,
-  idle: 3,
-};
+/** Saved party order (session ids, `tab:<id>` for launches); prefs values are size-capped. */
+const MAX_ORDER = 80;
+
+function isStringArray(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every((x) => typeof x === 'string');
+}
 
 /** Sub-agents still working for this hero (older server snapshots omit the field). */
 function activeSquires(a: AgentState): SquireInfo[] {
   return (a.squires ?? []).filter((s) => s.active);
 }
 
-/** Active-first order, then each squire moved directly under its parent (orphans keep their slot). */
-function partyOrder(agents: AgentState[]): { agent: AgentState; nested: boolean }[] {
-  const sorted = [...agents].sort((a, b) => {
-    // Sessions whose process has exited sink below every live one.
-    if (a.alive !== b.alive) return a.alive ? -1 : 1;
-    const r = STATUS_RANK[a.status] - STATUS_RANK[b.status];
-    if (r !== 0) return r;
-    return b.lastEventAt - a.lastEventAt;
-  });
-  const present = new Set(sorted.map((a) => a.sessionId));
-  const nested = (a: AgentState): boolean =>
-    a.isSquire && a.squireOf !== null && a.squireOf !== a.sessionId && present.has(a.squireOf);
-  const children = new Map<string, AgentState[]>();
-  for (const a of sorted) {
-    if (!nested(a)) continue;
-    const list = children.get(a.squireOf as string) ?? [];
-    list.push(a);
-    children.set(a.squireOf as string, list);
-  }
-  const out: { agent: AgentState; nested: boolean }[] = [];
-  const placed = new Set<string>();
-  const place = (a: AgentState): void => {
-    if (placed.has(a.sessionId)) return;
-    placed.add(a.sessionId);
-    out.push({ agent: a, nested: nested(a) });
-    for (const s of children.get(a.sessionId) ?? []) place(s);
-  };
-  for (const a of sorted) if (!nested(a)) place(a);
-  for (const a of sorted) place(a); // squire cycles, if the names ever loop
-  return out;
+/** Squires that sit under a parent card (the parent is in the party). */
+function nestedIn(agents: AgentState[]): (a: AgentState) => boolean {
+  const present = new Set(agents.map((a) => a.sessionId));
+  return (a) => a.isSquire && a.squireOf !== null && a.squireOf !== a.sessionId && present.has(a.squireOf);
 }
 
-/** Status pill (dot + label, ✓ when done) — shared with the drawer's session card. */
-export function StatusPill({ status }: { status: AgentStatus }) {
+/** Status pill (dot + label, ✓ when done) — shared with the drawer's session card. `yourTurn` lights it up. */
+export function StatusPill({ status, yourTurn = false }: { status: AgentStatus; yourTurn?: boolean }) {
   return (
-    <span className={`party-pill party-pill-${status}`} title={status}>
+    <span
+      className={`party-pill party-pill-${status} ${yourTurn ? 'party-pill-yourturn' : ''}`}
+      title={yourTurn ? 'Your turn — Claude is waiting for you' : status}
+    >
       <span className="party-dot" style={{ background: STATUS_COLORS[status] }} />
-      {status === 'done' && <span className="party-pill-check">✓</span>}
-      {STATUS_LABELS[status]}
+      {(status === 'done' || yourTurn) && <span className="party-pill-check">✓</span>}
+      {yourTurn ? 'Your turn' : STATUS_LABELS[status]}
     </span>
   );
 }
@@ -129,9 +108,13 @@ interface CardModel {
 
 export default function PartyBar(props: PartyBarProps) {
   const { agents, skewMs, selectedSessionId, onSelect, filterRef, onCreateParty, sleepers = [], rally, onRally } = props;
-  const { moveStatus = null, onMove, onCancelMove, onRestartApp = null } = props;
+  const { moveStatus = null, onMove, onCancelMove, onRestartApp = null, onDismiss } = props;
   const [now, setNow] = useState(() => Date.now());
   const [filter, setFilter] = useState('');
+  const [order, setOrder] = usePersistentState<string[]>('party-order', [], isStringArray);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropAt, setDropAt] = useState<{ id: string; after: boolean } | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   /** Last selection scrolled to — a new pick (or its card first appearing) scrolls once. */
   const scrolledTo = useRef<string | null>(null);
@@ -145,7 +128,8 @@ export default function PartyBar(props: PartyBarProps) {
     const byId = new Map(agents.map((a) => [a.sessionId, a]));
     // A process that exited without ever logging (a killed duplicate, an orphaned launch) is noise.
     const real = agents.filter((a) => a.alive || a.eventCount > 0);
-    return partyOrder(real).map(({ agent, nested }) => {
+    const isNested = nestedIn(real);
+    return real.map((agent) => {
       const name = agentName(agent);
       const subtitle = agentSubtitle(agent);
       const place = agentPlaceLabel(agent);
@@ -156,18 +140,62 @@ export default function PartyBar(props: PartyBarProps) {
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
-      return { agent, name, subtitle, place, branch, nested, parent, parentName, haystack };
+      return { agent, name, subtitle, place, branch, nested: isNested(agent), parent, parentName, haystack };
     });
   }, [agents]);
 
-  const q = filter.trim().toLowerCase();
-  const visible = q ? cards.filter((c) => c.haystack.includes(q)) : cards;
   // A placeholder merges away as soon as the real hero has a card.
   const carded = new Set(cards.map((c) => c.agent.sessionId));
-  const dreamers = sleepers.filter(
-    (s) => !carded.has(s.sessionId) && (!q || `${s.name} ${s.sessionId.slice(0, 8)} ${s.cwd}`.toLowerCase().includes(q)),
+  const sleeping = sleepers.filter((s) => !carded.has(s.sessionId));
+  const shown = cards.length + sleeping.length;
+
+  // Every id on show, in first-seen order — new ones join the saved order at the bottom.
+  const presentIds = useMemo(() => [...cards.map((c) => c.agent.sessionId), ...sleeping.map((s) => s.sessionId)], [cards, sleeping]);
+  const presentKey = presentIds.join('|');
+  useEffect(() => {
+    setOrder((cur) => {
+      const missing = presentIds.filter((id) => !cur.includes(id));
+      if (missing.length === 0) return cur;
+      const next = [...cur, ...missing];
+      if (next.length <= MAX_ORDER) return next;
+      // Over the cap: drop the oldest ids that aren't on show any more.
+      const present = new Set(presentIds);
+      const drop = next.length - MAX_ORDER;
+      let dropped = 0;
+      return next.filter((id) => present.has(id) || dropped++ >= drop);
+    });
+  }, [presentKey, setOrder]);
+
+  const rank = useMemo(() => new Map(order.map((id, i) => [id, i])), [order]);
+  const byRank = (a: string, b: string): number => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity);
+
+  const q = filter.trim().toLowerCase();
+  const visibleCards = q ? cards.filter((c) => c.haystack.includes(q)) : cards;
+  const visibleSleepers = sleeping.filter(
+    (s) => !q || `${s.name} ${s.sessionId.slice(0, 8)} ${s.cwd}`.toLowerCase().includes(q),
   );
-  const shown = cards.length + sleepers.filter((s) => !carded.has(s.sessionId)).length;
+
+  // Top-level slots in the user's order; squires follow their parent.
+  type Slot = { id: string; card?: CardModel; sleeper?: SleepingHero; children: CardModel[] };
+  const slots: Slot[] = [];
+  const childrenOf = new Map<string, CardModel[]>();
+  for (const c of visibleCards) {
+    if (!c.nested) continue;
+    const pid = c.agent.squireOf as string;
+    childrenOf.set(pid, [...(childrenOf.get(pid) ?? []), c]);
+  }
+  for (const c of visibleCards) {
+    if (c.nested) continue;
+    const kids = (childrenOf.get(c.agent.sessionId) ?? []).sort((a, b) => byRank(a.agent.sessionId, b.agent.sessionId));
+    slots.push({ id: c.agent.sessionId, card: c, children: kids });
+  }
+  // A squire whose parent is filtered out still shows, on its own.
+  const placedKids = new Set(slots.flatMap((s) => s.children.map((k) => k.agent.sessionId)));
+  for (const c of visibleCards) {
+    if (c.nested && !placedKids.has(c.agent.sessionId)) slots.push({ id: c.agent.sessionId, card: c, children: [] });
+  }
+  for (const s of visibleSleepers) slots.push({ id: s.sessionId, sleeper: s, children: [] });
+  slots.sort((a, b) => byRank(a.id, b.id));
 
   useEffect(() => {
     if (!selectedSessionId) {
@@ -190,6 +218,199 @@ export default function PartyBar(props: PartyBarProps) {
       e.currentTarget.blur();
     }
   };
+
+  // ── drag to reorder ──────────────────────────────────────────────────────
+  const onDragStart = (e: ReactDragEvent<HTMLDivElement>, id: string): void => {
+    setDragId(id);
+    setConfirmId(null);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
+  const onDragOver = (e: ReactDragEvent<HTMLDivElement>, id: string): void => {
+    if (!dragId || dragId === id) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const box = e.currentTarget.getBoundingClientRect();
+    const after = e.clientY > box.top + box.height / 2;
+    if (dropAt?.id !== id || dropAt.after !== after) setDropAt({ id, after });
+  };
+  const endDrag = (): void => {
+    setDragId(null);
+    setDropAt(null);
+  };
+  const onDrop = (e: ReactDragEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+    if (dragId && dropAt && dragId !== dropAt.id) {
+      setOrder((cur) => {
+        const base = cur.includes(dragId) ? cur : [...cur, dragId];
+        const without = base.filter((x) => x !== dragId);
+        const at = without.indexOf(dropAt.id);
+        if (at < 0) return base;
+        without.splice(dropAt.after ? at + 1 : at, 0, dragId);
+        return without;
+      });
+    }
+    endDrag();
+  };
+
+  const renderCard = ({ agent: a, name, subtitle, branch, nested, parent, parentName }: CardModel): ReactNode => {
+    const color = heroColor(a.sessionId);
+    const activity = activityLine(a);
+    const selected = a.sessionId === selectedSessionId;
+    const epithet = epithetOf(a.sessionId, name, a.isSquire);
+    const squires = activeSquires(a);
+    const offline = !a.alive && a.pid !== null;
+    // Not the user's turn while a squire is still out — the main turn may resume on its own.
+    const yourTurn = a.alive && (a.status === 'done' || a.ccStatus === 'idle') && squires.length === 0;
+    const goParent = parent ? () => onSelect(parent.sessionId) : null;
+    const shownBranch = featureBranch(branch);
+    // The session id, place and raw tool detail live here only — the card shows the friendly bits.
+    const tooltip = [
+      heroTitle(a),
+      subtitle ? `“${subtitle}”` : null,
+      agentPlaceLabel(a),
+      `${a.shortId}${branch ? ` · ⎇ ${branch}` : ''}`,
+      a.tool ? [a.tool, a.detail].filter(Boolean).join(': ') : null,
+      'click: open its terminal · drag: reorder',
+    ]
+      .filter(Boolean)
+      .join('\n');
+    const classes = [
+      'party-card',
+      selected ? 'party-card-selected' : '',
+      yourTurn ? 'party-card-yourturn' : '',
+      a.isSquire ? 'party-card-squire' : '',
+      nested ? 'party-card-nested' : '',
+    ].join(' ');
+    return (
+      <button
+        key={a.sessionId}
+        type="button"
+        data-session={a.sessionId}
+        className={classes}
+        style={a.isSquire ? ({ '--hero': color } as CSSProperties) : undefined}
+        aria-pressed={selected}
+        onClick={() => onSelect(a.sessionId)}
+        title={tooltip}
+      >
+        {/* Portrait beside the title block; the status row runs full-width underneath. */}
+        <span className="party-top">
+          <Portrait sessionId={a.sessionId} color={color} scale={2} squire={a.isSquire} className="party-avatar" />
+          <span className="party-body">
+            {/* Prefix / suffix decorate the name; the name itself wraps rather than truncates. */}
+            <span className="party-hero">
+              {epithet.prefix && <span className="ui-epithet-pre">{epithet.prefix} </span>}
+              <span className="party-name">{name}</span>
+              {epithet.suffix && <span className="ui-epithet-suf"> {epithet.suffix}</span>}
+            </span>
+            {/* Last tool failure as a monster chip; clears when the server nulls lastError. */}
+            {a.lastError && (
+              <span
+                className="party-error"
+                title={[a.lastError.tool ?? 'Error', a.lastError.detail].filter(Boolean).join(': ')}
+              >
+                <span className="party-error-tool">👾 {a.lastError.tool ?? 'Error'}</span>{' '}
+                {a.lastError.detail && <span className="party-error-text">{a.lastError.detail}</span>}{' '}
+                {(a.errorStreak ?? 0) >= 2 && <span className="party-error-n">×{a.errorStreak}</span>}
+              </span>
+            )}
+            {subtitle && (
+              <span className="party-subtitle" title={subtitle}>
+                {subtitle}
+              </span>
+            )}
+            {a.isSquire && parentName && (
+              <span
+                className={`party-squire-chip ${goParent ? 'party-squire-chip-link' : ''}`}
+                role={goParent ? 'link' : undefined}
+                tabIndex={goParent ? 0 : undefined}
+                title={goParent ? `Go to ${parentName}` : `${parentName} is not in the party`}
+                onClick={
+                  goParent
+                    ? (e) => {
+                        e.stopPropagation();
+                        goParent();
+                      }
+                    : undefined
+                }
+                onKeyDown={
+                  goParent
+                    ? (e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        goParent();
+                      }
+                    : undefined
+                }
+              >
+                ⚔ squire of {parentName}
+              </span>
+            )}
+            {(offline || a.status === 'delegating') && (
+              <span className="party-badges">
+                {offline && (
+                  <span className="party-badge party-badge-offline" title="The Claude Code process has exited">
+                    Offline
+                  </span>
+                )}
+                {a.status === 'delegating' && (
+                  <span
+                    className="party-badge party-badge-squire"
+                    title={
+                      squires.length > 0
+                        ? squires.map((s) => s.description ?? 'Unnamed squire').join('\n')
+                        : 'A sub-agent is still working'
+                    }
+                  >
+                    Squire out ×{Math.max(1, squires.length)}
+                  </span>
+                )}
+              </span>
+            )}
+            <span className="party-flavor">{flavorLine(a)}</span>
+            {shownBranch && <span className="party-branch">⎇ {shownBranch}</span>}
+          </span>
+        </span>
+        <span className="party-foot">
+          <StatusPill status={a.status} yourTurn={yourTurn} />
+          {activity && <span className="party-activity">{activity}</span>}
+          <span className="party-when">{relTime(a.lastEventAt, now + skewMs)}</span>
+        </span>
+      </button>
+    );
+  };
+
+  /** Hover ✕ → inline "End this session?" — the card's own button can't hold another button. */
+  const dismissControls = (id: string, name: string): ReactNode =>
+    !onDismiss ? null : confirmId === id ? (
+      <div className="party-dismiss-confirm" role="alertdialog" aria-label={`Dismiss ${name}?`}>
+        <span>End {name}?</span>
+        <button
+          type="button"
+          className="ui-btn party-dismiss-yes"
+          onClick={() => {
+            setConfirmId(null);
+            onDismiss(id);
+          }}
+        >
+          Dismiss
+        </button>
+        <button type="button" className="ui-btn party-dismiss-no" onClick={() => setConfirmId(null)}>
+          Keep
+        </button>
+      </div>
+    ) : (
+      <button
+        type="button"
+        className="party-dismiss"
+        aria-label={`Dismiss ${name}`}
+        title="Dismiss — ends this session and removes it from the party"
+        onClick={() => setConfirmId(id)}
+      >
+        ✕
+      </button>
+    );
 
   return (
     <aside className="party">
@@ -222,7 +443,7 @@ export default function PartyBar(props: PartyBarProps) {
         <MoveCard status={moveStatus} onMove={onMove} onCancel={onCancelMove} onRestart={onRestartApp} />
       )}
       {rally && onRally && <RallyCard rally={rally} onRally={onRally} />}
-      <div className="party-list" ref={listRef}>
+      <div className="party-list" ref={listRef} onDragEnd={endDrag}>
         {shown === 0 && (
           <div className="party-empty">
             No heroes yet.
@@ -230,156 +451,53 @@ export default function PartyBar(props: PartyBarProps) {
             Start a Claude Code session.
           </div>
         )}
-        {shown > 0 && visible.length === 0 && dreamers.length === 0 && (
-          <div className="party-empty">No hero matches “{filter.trim()}”.</div>
-        )}
-        {visible.map(({ agent: a, name, subtitle, place, branch, nested, parent, parentName }) => {
-          const color = heroColor(a.sessionId);
-          const activity = activityLine(a);
-          const selected = a.sessionId === selectedSessionId;
-          const epithet = epithetOf(a.sessionId, name, a.isSquire);
-          const squires = activeSquires(a);
-          const offline = !a.alive && a.pid !== null;
-          // Not the user's turn while a squire is still out — the main turn may resume on its own.
-          const yourTurn = a.alive && (a.status === 'done' || a.ccStatus === 'idle') && squires.length === 0;
-          const goParent = parent ? () => onSelect(parent.sessionId) : null;
-          const shownBranch = featureBranch(branch);
-          // The session id and raw tool detail live here only — the card shows the friendly bits.
-          const tooltip = [
-            heroTitle(a),
-            subtitle ? `“${subtitle}”` : null,
-            `${a.shortId}${branch ? ` · ⎇ ${branch}` : ''}`,
-            a.tool ? [a.tool, a.detail].filter(Boolean).join(': ') : null,
-            'click: open terminal & focus in the village',
-          ]
-            .filter(Boolean)
-            .join('\n');
+        {shown > 0 && slots.length === 0 && <div className="party-empty">No hero matches “{filter.trim()}”.</div>}
+        {slots.map((slot) => {
+          const name = slot.card ? slot.card.name : (slot.sleeper?.name ?? '');
           const classes = [
-            'party-card',
-            selected ? 'party-card-selected' : '',
-            a.isSquire ? 'party-card-squire' : '',
-            nested ? 'party-card-nested' : '',
+            'party-slot',
+            dragId === slot.id ? 'party-slot-dragging' : '',
+            dropAt?.id === slot.id ? (dropAt.after ? 'party-slot-drop-after' : 'party-slot-drop-before') : '',
           ].join(' ');
           return (
-            <button
-              key={a.sessionId}
-              type="button"
-              data-session={a.sessionId}
+            <div
+              key={slot.id}
               className={classes}
-              style={a.isSquire ? ({ '--hero': color } as CSSProperties) : undefined}
-              aria-pressed={selected}
-              onClick={() => onSelect(a.sessionId)}
-              title={tooltip}
+              draggable={!q}
+              onDragStart={(e) => onDragStart(e, slot.id)}
+              onDragOver={(e) => onDragOver(e, slot.id)}
+              onDrop={onDrop}
             >
-              {/* Portrait beside the title block; the wider rows run full-width underneath. */}
-              <span className="party-top">
-                <Portrait sessionId={a.sessionId} color={color} scale={2} squire={a.isSquire} className="party-avatar" />
-                <span className="party-body">
-                  {/* Prefix / suffix decorate the name; the name itself wraps rather than truncates. */}
-                  <span className="party-hero">
-                    {epithet.prefix && <span className="ui-epithet-pre">{epithet.prefix} </span>}
-                    <span className="party-name">{name}</span>
-                    {epithet.suffix && <span className="ui-epithet-suf"> {epithet.suffix}</span>}
-                  </span>
-                  {/* Last tool failure as a monster chip; clears when the server nulls lastError. */}
-                  {a.lastError && (
-                    <span
-                      className="party-error"
-                      title={[a.lastError.tool ?? 'Error', a.lastError.detail].filter(Boolean).join(': ')}
-                    >
-                      <span className="party-error-tool">👾 {a.lastError.tool ?? 'Error'}</span>{' '}
-                      {a.lastError.detail && <span className="party-error-text">{a.lastError.detail}</span>}{' '}
-                      {(a.errorStreak ?? 0) >= 2 && <span className="party-error-n">×{a.errorStreak}</span>}
-                    </span>
+              {slot.card
+                ? renderCard(slot.card)
+                : slot.sleeper && (
+                    <SleeperCard hero={slot.sleeper} selected={slot.id === selectedSessionId} onSelect={onSelect} />
                   )}
-                  {subtitle && (
-                    <span className="party-subtitle" title={subtitle}>
-                      {subtitle}
-                    </span>
-                  )}
-                  {a.isSquire && parentName && (
-                    <span
-                      className={`party-squire-chip ${goParent ? 'party-squire-chip-link' : ''}`}
-                      role={goParent ? 'link' : undefined}
-                      tabIndex={goParent ? 0 : undefined}
-                      title={goParent ? `Go to ${parentName}` : `${parentName} is not in the party`}
-                      onClick={
-                        goParent
-                          ? (e) => {
-                              e.stopPropagation();
-                              goParent();
-                            }
-                          : undefined
-                      }
-                      onKeyDown={
-                        goParent
-                          ? (e) => {
-                              if (e.key !== 'Enter' && e.key !== ' ') return;
-                              e.preventDefault();
-                              e.stopPropagation();
-                              goParent();
-                            }
-                          : undefined
-                      }
-                    >
-                      ⚔ squire of {parentName}
-                    </span>
-                  )}
-                  {(offline || yourTurn || a.status === 'delegating') && (
-                    <span className="party-badges">
-                      {offline && (
-                        <span className="party-badge party-badge-offline" title="The Claude Code process has exited">
-                          Offline
-                        </span>
-                      )}
-                      {yourTurn && <span className="party-badge">Your turn</span>}
-                      {a.status === 'delegating' && (
-                        <span
-                          className="party-badge party-badge-squire"
-                          title={
-                            squires.length > 0
-                              ? squires.map((s) => s.description ?? 'Unnamed squire').join('\n')
-                              : 'A sub-agent is still working'
-                          }
-                        >
-                          Squire out ×{Math.max(1, squires.length)}
-                        </span>
-                      )}
-                    </span>
-                  )}
-                  <span className="party-flavor">{flavorLine(a)}</span>
-                  <span className="party-sub">
-                    <span className="party-place">{place}</span>
-                    {shownBranch && (
-                      <>
-                        <span className="party-sep">·</span>
-                        <span className="party-branch">⎇ {shownBranch}</span>
-                      </>
-                    )}
-                  </span>
-                </span>
-              </span>
-              <span className="party-foot">
-                <StatusPill status={a.status} />
-                {activity && <span className="party-activity">{activity}</span>}
-                <span className="party-when">{relTime(a.lastEventAt, now + skewMs)}</span>
-              </span>
-            </button>
+              {dismissControls(slot.id, name)}
+              {slot.children.map((kid) => (
+                <div key={kid.agent.sessionId} className="party-slot party-slot-kid">
+                  {renderCard(kid)}
+                  {dismissControls(kid.agent.sessionId, kid.name)}
+                </div>
+              ))}
+            </div>
           );
         })}
-        {dreamers.map((s) => (
-          <SleeperCard key={s.sessionId} hero={s} selected={s.sessionId === selectedSessionId} onSelect={onSelect} />
-        ))}
       </div>
     </aside>
   );
 }
 
-/** Placeholder for a hero whose terminal came back after a restart but isn't running (or listed) yet. */
+/** Placeholder for a hero whose terminal came back after a restart (or a launch not yet adopted). */
 function SleeperCard({ hero: s, selected, onSelect }: { hero: SleepingHero; selected: boolean; onSelect: (id: string) => void }) {
   const color = heroColor(s.sessionId);
-  const place = agentPlaceLabel({ cwd: s.cwd, rootCwd: s.rootCwd, title: null, customTitle: s.name });
-  const line = s.asleep ? 'asleep in the tavern — click to wake' : 'waking up…';
+  const line = s.launching
+    ? s.asleep
+      ? 'restored — click to start'
+      : 'setting out…'
+    : s.asleep
+      ? 'asleep in the tavern — click to wake'
+      : 'waking up…';
   return (
     <button
       type="button"
@@ -387,7 +505,7 @@ function SleeperCard({ hero: s, selected, onSelect }: { hero: SleepingHero; sele
       className={`party-card party-card-sleeper ${selected ? 'party-card-selected' : ''}`}
       aria-pressed={selected}
       onClick={() => onSelect(s.sessionId)}
-      title={`${s.name}\n${s.sessionId.slice(0, 8)} · restored terminal tab\nclick: open its terminal`}
+      title={`${s.name}\n${s.launching ? 'new session' : `${s.sessionId.slice(0, 8)} · restored terminal tab`}\nclick: open its terminal · drag: reorder`}
     >
       <span className="party-top">
         <Portrait sessionId={s.sessionId} color={color} scale={2} squire={s.squire} className="party-avatar" />
@@ -396,14 +514,11 @@ function SleeperCard({ hero: s, selected, onSelect }: { hero: SleepingHero; sele
             <span className="party-name">{s.name}</span>
           </span>
           <span className="party-flavor">{line}</span>
-          <span className="party-sub">
-            <span className="party-place">{place}</span>
-          </span>
         </span>
       </span>
       <span className="party-foot">
-        <span className="party-pill party-pill-sleeper" title="Restored after a restart">
-          💤 {s.asleep ? 'Asleep' : 'Waking'}
+        <span className="party-pill party-pill-sleeper" title={s.launching ? 'Starting a new session' : 'Restored after a restart'}>
+          {s.launching ? '✦ New' : `💤 ${s.asleep ? 'Asleep' : 'Waking'}`}
         </span>
       </span>
     </button>

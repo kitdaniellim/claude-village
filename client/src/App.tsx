@@ -3,7 +3,7 @@
 // the village shrinks to a live preview under the party. Owns the UI state and
 // wires useAgentSocket data into every panel.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isBool, usePersistentState } from './hooks/usePersistentState';
 import { useAgentSocket } from './hooks/useAgentSocket';
 import { useSound } from './hooks/useSound';
@@ -30,6 +30,14 @@ import MapEditor, {
   saveLayout,
 } from './components/MapEditor';
 import type { LayoutMap } from './components/MapEditor';
+
+/** A killed session may log one last line; don't let that bring it back. */
+const DISMISS_GRACE_MS = 15_000;
+const MAX_DISMISSED = 40;
+
+function isDismissedMap(v: unknown): v is Record<string, number> {
+  return !!v && typeof v === 'object' && Object.values(v as object).every((n) => typeof n === 'number');
+}
 import './App.css';
 
 const PARTY_W = 260;
@@ -79,7 +87,37 @@ export default function App() {
   const feedUnread = useUnreadEvents(events, feed.mode === 'open');
   const desktop = useDesktopSettings();
   const sound = useSound(agents, events, selectedSessionId);
-  const rally = useRally(agents, connection);
+  const rallyAll = useRally(agents, connection);
+  // Dismissed from the party (✕): sessionId → when. Hidden until the session logs something newer.
+  const [dismissed, setDismissed] = usePersistentState<Record<string, number>>('party-dismissed', {}, isDismissedMap);
+  const [dismissRequest, setDismissRequest] = useState<FocusRequest | null>(null);
+  const isDismissed = useCallback(
+    (sessionId: string, lastAt: number): boolean => {
+      const at = dismissed[sessionId];
+      return at !== undefined && lastAt <= at + DISMISS_GRACE_MS;
+    },
+    [dismissed],
+  );
+  const partyAgents = useMemo(() => agents.filter((a) => !isDismissed(a.sessionId, a.lastEventAt)), [agents, isDismissed]);
+  // A dismissed session isn't "recently closed" either.
+  const rally = useMemo(
+    () => ({ ...rallyAll, sessions: rallyAll.sessions.filter((s) => !isDismissed(s.sessionId, s.lastAliveAt)) }),
+    [rallyAll, isDismissed],
+  );
+  const handleDismiss = useCallback((sessionId: string) => {
+    setDismissed((cur) => {
+      const next = { ...cur, [sessionId]: Date.now() };
+      // Keep the newest few (prefs values are size-capped).
+      const keep = Object.entries(next).sort((a, b) => b[1] - a[1]).slice(0, MAX_DISMISSED);
+      return Object.fromEntries(keep);
+    });
+    setDismissRequest((prev) => ({ sessionId, nonce: (prev?.nonce ?? 0) + 1 }));
+    setSelectedSessionId((cur) => (cur === sessionId ? null : cur));
+  }, [setDismissed]);
+  // The drawer switched terminals on its own (Create Party, Rally, Move): highlight that hero.
+  const handleActiveChange = useCallback((id: string | null) => {
+    if (id) setSelectedSessionId(id);
+  }, []);
 
   // Desktop settings win once on load; afterwards every toggle is mirrored back.
   const adoptedDesktopSound = useRef(false);
@@ -235,7 +273,7 @@ export default function App() {
       />
       <main className={`app-main ${focusActive ? 'app-main-focus' : ''}`} style={{ gridTemplateColumns: columns }}>
         <PartyBar
-          agents={agents}
+          agents={partyAgents}
           skewMs={skewMs}
           selectedSessionId={selectedSessionId}
           onSelect={handleSelectAgent}
@@ -248,6 +286,7 @@ export default function App() {
           onMove={handleMove}
           onCancelMove={handleCancelMove}
           onRestartApp={desktop.bridge ? () => desktop.bridge?.restart() : null}
+          onDismiss={handleDismiss}
         />
         {focusActive && toasts}
         <div className={`app-village ${focusActive ? 'app-village-preview' : ''}`}>
@@ -312,6 +351,8 @@ export default function App() {
           rallyRequest={rallyRequest}
           moveRequest={moveRequest}
           onMoveStatus={setMoveStatus}
+          dismissRequest={dismissRequest}
+          onActiveChange={handleActiveChange}
         />
       </main>
       <ActivityFeed

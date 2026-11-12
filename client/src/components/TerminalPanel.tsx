@@ -5,7 +5,7 @@
 // Desktop: tabs are saved on every change and come back asleep after a restart.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { AgentState, NamesResponse, RallySession } from '../types/agent';
 import { serverHttpUrl } from '../hooks/useAgentSocket';
 import type { DesktopBridge, FocusSessionResult } from '../types/desktop';
@@ -29,8 +29,6 @@ import {
 import { epithetOf, epithetTitle } from '../utils/epithet';
 import { flavorLine } from '../utils/flavor';
 import {
-  KIND_GLYPH,
-  KIND_LABEL,
   TABS_STORAGE_KEY,
   cwdForProject,
   makeTab,
@@ -127,7 +125,14 @@ export interface TerminalPanelProps {
   /** "Move into the village" clicked. */
   moveRequest?: MoveRequest | null;
   onMoveStatus?: (status: MoveStatus) => void;
+  /** Party card ✕ confirmed: end this session (our tab, or the outside claude) and drop it. */
+  dismissRequest?: FocusRequest | null;
+  /** The terminal on show changed (a session id, `tab:<id>` for a launch not yet adopted, or null). */
+  onActiveChange?: (id: string | null) => void;
 }
+
+/** Party id for a launch tab whose hero hasn't appeared yet. */
+export const LAUNCH_PREFIX = 'tab:';
 
 interface Chooser {
   /** Null lists every place (Create Party). */
@@ -147,11 +152,6 @@ const TOAST_MS = 4500;
 /** The tab that *is* this hero — a resumed session (launches become one once their hero appears). */
 function tabFor(tabs: TerminalTab[], sessionId: string): TerminalTab | null {
   return tabs.find((t) => t.kind === 'resume' && t.sessionId === sessionId) ?? null;
-}
-
-/** Face on the tab: the hero, or the parent's squire face while a fork is still spawning. */
-function tabFace(t: Pick<TerminalTab, 'kind' | 'sessionId'>): string | null {
-  return t.kind === 'new' ? null : t.sessionId;
 }
 
 /** Frame colour for a tab not yet linked to a hero — never a borrowed repo/parent colour. */
@@ -218,8 +218,9 @@ function focusToast(r: FocusSessionResult): Omit<Toast, 'nonce'> {
 export default function TerminalPanel(props: TerminalPanelProps) {
   const { open, width, onWidthChange, onClose, bridge, agents, sessionRequest, placeRequest, focusMode, onToggleFocus } = props;
   const { synced, onHeroAdopted, onSleepers, onRestoreDrawer, rallyRequest, moveRequest, onMoveStatus } = props;
-  const cbs = useRef({ onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus });
-  cbs.current = { onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus };
+  const { dismissRequest, onActiveChange } = props;
+  const cbs = useRef({ onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus, onActiveChange });
+  cbs.current = { onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus, onActiveChange };
 
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -382,6 +383,11 @@ export default function TerminalPanel(props: TerminalPanelProps) {
   /** Party / village pick: our tab if we have one; a "Go to terminal" card if it runs elsewhere; else resume here. */
   const openSession = useCallback(
     (sessionId: string): void => {
+      if (sessionId.startsWith(LAUNCH_PREFIX)) {
+        const launch = tabsRef.current.find((t) => t.id === sessionId.slice(LAUNCH_PREFIX.length));
+        if (launch) focusTab(launch.id);
+        return;
+      }
       const existing = tabFor(tabsRef.current, sessionId);
       if (existing) {
         focusTab(existing.id);
@@ -653,6 +659,72 @@ export default function TerminalPanel(props: TerminalPanelProps) {
     [moveOne, focusTab, showToast],
   );
 
+  /**
+   * "Pop out": end this tab's claude and resume the session in the OS terminal, so a village
+   * restart can't take it down. Mid-turn sessions are refused (closing would cut the turn off).
+   */
+  const popOut = useCallback(
+    (t: TerminalTab): void => {
+      const pop = bridge?.popOutSession;
+      const sid = t.kind === 'resume' ? t.sessionId : null;
+      if (!pop || !sid) return;
+      const a = agentsRef.current.find((x) => x.sessionId === sid);
+      if (a && a.alive && !turnOver(a)) {
+        showToast({ tone: 'warn', text: `${agentName(a)} is mid-turn`, hint: 'Pop it out when its turn ends.' });
+        return;
+      }
+      closeTab(t.id);
+      // Give the village's claude a moment to exit before the outside one opens the same session.
+      window.setTimeout(() => {
+        pop({ sessionId: sid, cwd: t.cwd })
+          .then((r) =>
+            showToast(
+              r.ok
+                ? { tone: 'ok', text: `${t.name} popped out ✓`, hint: `${r.detail} — Move here brings it back.` }
+                : { tone: 'err', text: `Couldn't pop out ${t.name}`, hint: r.detail },
+            ),
+          )
+          .catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            showToast({
+              tone: 'err',
+              text: `Couldn't pop out ${t.name}`,
+              hint: /No handler registered/i.test(msg) ? 'Restart the app once (↻) to finish installing Pop out.' : msg,
+            });
+          });
+      }, 1200);
+    },
+    [bridge, closeTab, showToast],
+  );
+
+  /** Party ✕: end the session — our tab's claude, or the outside one (verified) — and forget its tab. */
+  const handledDismiss = useRef<FocusRequest | null>(null);
+  useEffect(() => {
+    if (!dismissRequest || handledDismiss.current === dismissRequest) return;
+    handledDismiss.current = dismissRequest;
+    const id = dismissRequest.sessionId;
+    if (cardId === id) setCardId(null);
+    const tab = id.startsWith(LAUNCH_PREFIX)
+      ? tabsRef.current.find((t) => t.id === id.slice(LAUNCH_PREFIX.length))
+      : tabFor(tabsRef.current, id);
+    if (tab) {
+      closeTab(tab.id);
+      return;
+    }
+    const a = agentsRef.current.find((x) => x.sessionId === id);
+    const release = bridge?.releaseSession;
+    if (!a || !a.alive || a.pid === null || !release) return;
+    const pid = a.pid;
+    release({ pid, sessionId: id })
+      .then((r) => {
+        if (r.ok) releasedPids.current.add(pid);
+        else showToast({ tone: 'err', text: `Couldn't end ${agentName(a)}`, hint: r.detail });
+      })
+      .catch((err: unknown) =>
+        showToast({ tone: 'err', text: `Couldn't end ${agentName(a)}`, hint: err instanceof Error ? err.message : String(err) }),
+      );
+  }, [dismissRequest, cardId, bridge, closeTab, showToast]);
+
   const handledMoveRef = useRef<MoveRequest | null>(null);
   useEffect(() => {
     if (!moveRequest || handledMoveRef.current === moveRequest) return;
@@ -890,12 +962,39 @@ export default function TerminalPanel(props: TerminalPanelProps) {
     if (t?.restored) void wakeTab(t.id, false);
   }, [activeId, synced, wakeNonce, wakeTab]);
 
+  // Tell the app which terminal is on show, so the party highlight follows the drawer.
+  const shownRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    let shown: string | null = null;
+    if (cardId) shown = cardId;
+    else if (!chooser) {
+      const t = tabs.find((x) => x.id === activeId);
+      if (t) shown = t.kind === 'resume' && t.sessionId ? t.sessionId : LAUNCH_PREFIX + t.id;
+    }
+    if (shown === shownRef.current) return;
+    shownRef.current = shown;
+    if (shown) cbs.current.onActiveChange?.(shown);
+  }, [tabs, activeId, cardId, chooser]);
+
   // Resumed heroes, so the party keeps a placeholder card while the server doesn't list them.
   const sleepersKey = useRef('');
   useEffect(() => {
     const list: SleepingHero[] = [];
     for (const t of tabs) {
-      if (t.kind !== 'resume' || !t.sessionId || t.missing) continue;
+      if (t.kind !== 'resume') {
+        // No tab strip any more: a launch is reachable from the party until its hero shows up.
+        list.push({
+          sessionId: LAUNCH_PREFIX + t.id,
+          name: t.name,
+          cwd: t.cwd,
+          rootCwd: t.rootCwd ?? null,
+          squire: t.squire,
+          asleep: !!t.restored,
+          launching: true,
+        });
+        continue;
+      }
+      if (!t.sessionId || t.missing) continue;
       list.push({
         sessionId: t.sessionId,
         name: t.name,
@@ -939,16 +1038,6 @@ export default function TerminalPanel(props: TerminalPanelProps) {
   const active = overlay ? null : (tabs.find((t) => t.id === activeId) ?? null);
   const activeAgent =
     active?.kind === 'resume' && active.sessionId ? (agents.find((a) => a.sessionId === active.sessionId) ?? null) : null;
-  const activePlace = active
-    ? agentPlaceLabel(activeAgent ?? { cwd: active.cwd, rootCwd: active.cwd, title: null, customTitle: null })
-    : '';
-
-  const onTabKey = (e: ReactKeyboardEvent<HTMLDivElement>, id: string): void => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      focusTab(id);
-    }
-  };
 
   const activeView = active ? liveView(active, agents) : null;
 
@@ -967,130 +1056,50 @@ export default function TerminalPanel(props: TerminalPanelProps) {
         />
       )}
 
-      {/* Top row: the tabs, then the drawer's own controls. */}
+      {/* One row: what the drawer shows when it isn't a terminal, then the actions. The party on the
+          left is the tab list — picking a hero there switches this terminal. */}
       <div className="drawer-strip">
-        <div className="drawer-tabs" role="tablist">
-          {tabs.length === 0 && !card && !chooser && <span className="drawer-title">Terminals</span>}
-          {tabs.map((t) => {
-            const isActive = !overlay && t.id === activeId;
-            const face = tabFace(t);
-            const view = liveView(t, agents);
-            return (
-              <div
-                key={t.id}
-                role="tab"
-                tabIndex={0}
-                aria-selected={isActive}
-                className={`drawer-tab ${isActive ? 'drawer-tab-active' : ''}`}
-                onClick={() => focusTab(t.id)}
-                onKeyDown={(e) => onTabKey(e, t.id)}
-                onAuxClick={(e) => {
-                  if (e.button === 1) closeTab(t.id);
-                }}
-                title={[view.name, t.shortId, KIND_LABEL[t.kind], t.cwd].filter(Boolean).join(' · ')}
-              >
-                {face ? (
-                  <Portrait sessionId={face} color={view.color} squire={view.squire} className="drawer-tab-portrait" />
-                ) : (
-                  <span className="drawer-tab-glyph" style={{ color: view.color }}>
-                    {KIND_GLYPH[t.kind]}
-                  </span>
-                )}
-                <span className="drawer-tab-label">{view.name}</span>
-                {t.restored && (
-                  <span className="drawer-tab-restored" title="Restored after a restart — starts when you open it">
-                    ↻ restored
-                  </span>
-                )}
-                <button
-                  type="button"
-                  className="drawer-tab-x"
-                  aria-label="Close tab"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeTab(t.id);
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            );
-          })}
-          {card && !chooser && (
-            <div
-              role="tab"
-              aria-selected
-              className="drawer-tab drawer-tab-active drawer-tab-chooser"
-              title={`${agentName(card)} · ${card.shortId} · running in another terminal`}
-            >
-              <Portrait
-                sessionId={card.sessionId}
-                color={heroColor(card.sessionId)}
-                squire={card.isSquire}
-                className="drawer-tab-portrait"
-              />
-              <span className="drawer-tab-label">{agentName(card)}</span>
-              <span className="drawer-tab-glyph" aria-hidden>
-                ↗
-              </span>
-              <button type="button" className="drawer-tab-x" aria-label="Close card" onClick={() => setCardId(null)}>
-                ×
-              </button>
-            </div>
-          )}
-          {chooser && (
-            <div role="tab" aria-selected className="drawer-tab drawer-tab-active drawer-tab-chooser">
-              <span className="drawer-tab-glyph">✦</span>
-              <span className="drawer-tab-label">{chooser.place ? 'New quest' : 'Create party'}</span>
+        <span className="drawer-strip-label">
+          {chooser ? (
+            <>
+              <span className="drawer-tab-glyph">✦</span> {chooser.place ? 'New quest' : 'Create party'}
               <button type="button" className="drawer-tab-x" aria-label="Close chooser" onClick={() => setChooser(null)}>
                 ×
               </button>
-            </div>
-          )}
-        </div>
-        <span className="drawer-strip-tools">
-          <span className="drawer-hint" title="Toggle the drawer">
-            <kbd>Ctrl</kbd>+<kbd>`</kbd>
-          </span>
-          <button type="button" className="drawer-close" onClick={onClose} title="Hide drawer (Esc)" aria-label="Hide drawer">
-            ×
-          </button>
-        </span>
-      </div>
-
-      {/* One tidy row: name · place · cwd · status, then Fetch Squire / Focus / Close. */}
-      {active && activeView && (
-        <div className="drawer-session">
-          <span className="drawer-session-info">
-            <span className="drawer-session-name" title={activeView.name}>
-              {activeView.name}
-            </span>
-            <span className="drawer-session-place" title={activePlace}>
-              {activePlace}
-            </span>
-            <span className="drawer-sep">·</span>
-            <span className="drawer-session-cwd" title={active.cwd}>
-              {shortPath(active.cwd)}
-            </span>
-            {activeAgent ? (
-              <StatusPill status={activeAgent.status} />
-            ) : (
-              <span className="drawer-session-kind">
-                {active.missing ? 'No history' : active.restored ? 'Asleep' : 'Starting…'}
-              </span>
-            )}
-          </span>
-          <span className="drawer-actions">
-            {active.kind === 'resume' && !active.missing && (
-              <button
-                type="button"
-                className="drawer-btn drawer-btn-squire"
-                onClick={() => fetchSquire(active)}
-                title={`Fork this session with its context as "${squireName(activeView.name)}"`}
-              >
-                ⚔ Fetch Squire <span className="drawer-btn-muted">(Fork)</span>
+            </>
+          ) : card ? (
+            <>
+              <span className="drawer-tab-glyph">↗</span> {agentName(card)} · running in another terminal
+              <button type="button" className="drawer-tab-x" aria-label="Close card" onClick={() => setCardId(null)}>
+                ×
               </button>
-            )}
+            </>
+          ) : !active ? (
+            <span className="drawer-title">Terminals</span>
+          ) : null}
+        </span>
+        <span className="drawer-actions">
+          {active && active.kind === 'resume' && active.sessionId && !active.missing && bridge?.popOutSession && (
+            <button
+              type="button"
+              className="drawer-btn"
+              onClick={() => popOut(active)}
+              title="Pop out — continue this session in its own terminal window, safe from village restarts"
+            >
+              ⇱ Pop out
+            </button>
+          )}
+          {active && activeView && active.kind === 'resume' && !active.missing && (
+            <button
+              type="button"
+              className="drawer-btn drawer-btn-squire"
+              onClick={() => fetchSquire(active)}
+              title={`Fork this session with its context as "${squireName(activeView.name)}"`}
+            >
+              ⚔ Fetch Squire <span className="drawer-btn-muted">(Fork)</span>
+            </button>
+          )}
+          {active && (
             <button
               type="button"
               className={`drawer-btn ${focusMode ? 'drawer-btn-on' : ''}`}
@@ -1100,18 +1109,18 @@ export default function TerminalPanel(props: TerminalPanelProps) {
             >
               {focusMode ? '⤡ Exit focus' : '⤢ Focus'}
             </button>
-            <button
-              type="button"
-              className="drawer-btn drawer-btn-danger drawer-btn-icon"
-              onClick={() => closeTab(active.id)}
-              title="Close tab"
-              aria-label="Close tab"
-            >
-              ×
-            </button>
-          </span>
-        </div>
-      )}
+          )}
+          <button
+            type="button"
+            className="drawer-close"
+            onClick={onClose}
+            title="Hide drawer (Ctrl+` · Esc)"
+            aria-label="Hide drawer"
+          >
+            ×
+          </button>
+        </span>
+      </div>
 
       {active && active.elsewherePid !== null && !active.missing && (
         <div className="drawer-warn" role="status">
