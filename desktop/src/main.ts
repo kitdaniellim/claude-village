@@ -11,6 +11,7 @@ import type { DesktopSettings, PtyOpenOptions } from '../../client/src/types/des
 import { resolveClaudePath } from './claude';
 import { findTranscript, focusSession } from './focus';
 import { releaseSession } from './release';
+import { popOutSession } from './popout';
 import { trayIcon, windowIcon } from './icon';
 import {
   CLIENT_URL,
@@ -292,6 +293,7 @@ function registerIpc(): void {
   ipcMain.handle('session:focus', (_e, req: unknown) => focusSession(req));
   ipcMain.handle('session:transcript', (_e, sessionId: unknown) => findTranscript(sessionId));
   ipcMain.handle('session:release', (_e, req: unknown) => releaseSession(req, () => ptyModule?.ownedPids() ?? []));
+  ipcMain.handle('session:popout', (_e, req: unknown) => popOutSession(req, settings.skipPermissions));
 
   ipcMain.handle('tabs:load', () => loadTabState());
   ipcMain.on('tabs:save', (_e, json: unknown) => saveTabState(json));

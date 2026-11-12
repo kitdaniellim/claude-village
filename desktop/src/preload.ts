@@ -12,6 +12,8 @@ import type {
   ReleaseSessionRequest,
   ReleaseSessionResult,
   TranscriptLookup,
+  PopOutRequest,
+  PopOutResult,
 } from '../../client/src/types/desktop';
 
 type DataCb = (data: string) => void;
@@ -65,6 +67,7 @@ const bridge: DesktopBridge = {
   focusSession: (req: FocusSessionRequest): Promise<FocusSessionResult> => ipcRenderer.invoke('session:focus', req),
   findTranscript: (sessionId: string): Promise<TranscriptLookup> => ipcRenderer.invoke('session:transcript', sessionId),
   releaseSession: (req: ReleaseSessionRequest): Promise<ReleaseSessionResult> => ipcRenderer.invoke('session:release', req),
+  popOutSession: (req: PopOutRequest): Promise<PopOutResult> => ipcRenderer.invoke('session:popout', req),
   tabState: {
     load: (): Promise<string | null> => ipcRenderer.invoke('tabs:load'),
     save: (json: string) => ipcRenderer.send('tabs:save', json),

@@ -84,6 +84,17 @@ export interface ReleaseSessionResult {
   detail: string;
 }
 
+export interface PopOutRequest {
+  sessionId: string;
+  /** The folder to resume it in (its transcript's folder). */
+  cwd: string;
+}
+
+export interface PopOutResult {
+  ok: boolean;
+  detail: string;
+}
+
 export interface DesktopBridge {
   /** Electron + app versions, for the About row. */
   versions: { app: string; electron: string; node: string };
@@ -106,6 +117,8 @@ export interface DesktopBridge {
   findTranscript?(sessionId: string): Promise<TranscriptLookup>;
   /** "Move into the village": close the outside claude running this session (verified first). Absent on older shells. */
   releaseSession?(req: ReleaseSessionRequest): Promise<ReleaseSessionResult>;
+  /** "Pop out": resume this session in the OS terminal (Terminal.app / Windows Terminal). Absent on older shells. */
+  popOutSession?(req: PopOutRequest): Promise<PopOutResult>;
   /** Terminal tabs saved by the main process too (a restart can switch origin file:// → localhost). Absent on older shells. */
   tabState?: {
     load(): Promise<string | null>;
