@@ -204,7 +204,8 @@ export default function XtermView({ bridge, tab, active, onPid, onMissing, onClo
     }
     fitRef.current?.();
 
-    const opts = { ...launchOptions(tabRef.current), cols: term.cols, rows: term.rows };
+    // Keyed by tab id: after a page reload the main process hands back the claude that kept running.
+    const opts = { ...launchOptions(tabRef.current), key: tabRef.current.id, cols: term.cols, rows: term.rows };
     // Only a resume/fork can fail with a missing transcript, and only at startup (first 20 s);
     // keep a short tail so the message matches across chunks.
     const resumeId = opts.resumeSessionId ?? null;
@@ -224,6 +225,12 @@ export default function XtermView({ bridge, tab, active, onPid, onMissing, onClo
           id = h.id;
           ptyIdRef.current = h.id;
           cbRef.current.onPid?.(typeof h.pid === 'number' ? h.pid : null);
+          if (typeof h.replay === 'string') {
+            // Reattached: repaint what the screen showed, and skip the startup missing-history watch.
+            term.reset();
+            term.write(h.replay);
+            tail = null;
+          }
           unsubData = bridge.pty.onData(h.id, (d) => {
             term.write(d);
             if (tail === null || resumeId === null) return;

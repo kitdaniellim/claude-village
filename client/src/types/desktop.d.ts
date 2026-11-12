@@ -24,6 +24,8 @@ export interface PtyOpenOptions {
   fork?: boolean;
   /** `--name <name>`: display name for the new/forked session (e.g. "Nameless", "Squire of MY VILLAGE"). */
   name?: string;
+  /** The tab's id: if a terminal opened under this key is still running (the page reloaded), reattach to it. */
+  key?: string;
   cols: number;
   rows: number;
 }
@@ -33,6 +35,8 @@ export interface PtyHandle {
   id: string;
   /** OS pid of the spawned process (claude.exe) — matches AgentState.pid once its session file appears. */
   pid?: number;
+  /** Reattached to a terminal that kept running across a reload: its recent output, to repaint the screen. */
+  replay?: string;
 }
 
 export interface FocusSessionRequest {
@@ -110,6 +114,8 @@ export interface DesktopBridge {
     /** Returns an unsubscribe function. */
     onData(id: string, cb: (data: string) => void): () => void;
     onExit(id: string, cb: (code: number) => void): () => void;
+    /** Keys of terminals still running in the main process (absent on older shells). */
+    live?(): Promise<string[]>;
   };
   /** Bring the external terminal running this claude pid to the front (Windows). Absent on older shells. */
   focusSession?(req: FocusSessionRequest): Promise<FocusSessionResult>;

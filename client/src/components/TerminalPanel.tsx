@@ -131,6 +131,9 @@ export interface TerminalPanelProps {
   onActiveChange?: (id: string | null) => void;
 }
 
+/** Past the shell's 3 s close grace (desktop main.ts CLOSE_GRACE_MS) plus exit time. */
+const POP_OUT_DELAY_MS = 4500;
+
 /** Party id for a launch tab whose hero hasn't appeared yet. */
 export const LAUNCH_PREFIX = 'tab:';
 
@@ -674,7 +677,9 @@ export default function TerminalPanel(props: TerminalPanelProps) {
         return;
       }
       closeTab(t.id);
-      // Give the village's claude a moment to exit before the outside one opens the same session.
+      // The shell ends a closed tab's claude after a 3 s grace (reload safety); wait past it so the
+      // outside claude never shares the session with the village's.
+      showToast({ tone: 'ok', text: `Popping out ${t.name}…`, hint: 'Opening it in a terminal window in a few seconds.' });
       window.setTimeout(() => {
         pop({ sessionId: sid, cwd: t.cwd })
           .then((r) =>
@@ -692,7 +697,7 @@ export default function TerminalPanel(props: TerminalPanelProps) {
               hint: /No handler registered/i.test(msg) ? 'Restart the app once (↻) to finish installing Pop out.' : msg,
             });
           });
-      }, 1200);
+      }, POP_OUT_DELAY_MS);
     },
     [bridge, closeTab, showToast],
   );
@@ -908,11 +913,16 @@ export default function TerminalPanel(props: TerminalPanelProps) {
     } catch {
       // storage blocked — the desktop copy may still have it
     }
+    // Terminals that kept running through a reload come back live (they reattach), not asleep.
+    const liveKeys: Promise<string[]> = (bridge.pty.live?.() ?? Promise.resolve([])).catch(() => []);
     const apply = (saved: PersistedTabs | null): void => {
+      void liveKeys.then((keys) => restore(saved, new Set(keys)));
+    };
+    const restore = (saved: PersistedTabs | null, running: Set<string>): void => {
       if (!live || restoreDone.current) return;
       restoreDone.current = true;
       if (saved && saved.tabs.length > 0) {
-        const back = restoreTabs(saved);
+        const back = restoreTabs(saved).map((t) => (running.has(t.id) ? { ...t, restored: false } : t));
         const had = tabsRef.current.length > 0;
         setTabs((cur) => [...back, ...cur.filter((c) => !back.some((b) => b.id === c.id))]);
         void recoverNames(back);

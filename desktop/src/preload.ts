@@ -63,6 +63,7 @@ const bridge: DesktopBridge = {
     close: (id) => ipcRenderer.send('pty:close', id),
     onData: (id, cb) => subscribe(dataSubs, id, cb),
     onExit: (id, cb) => subscribe(exitSubs, id, cb),
+    live: (): Promise<string[]> => ipcRenderer.invoke('pty:live'),
   },
   focusSession: (req: FocusSessionRequest): Promise<FocusSessionResult> => ipcRenderer.invoke('session:focus', req),
   findTranscript: (sessionId: string): Promise<TranscriptLookup> => ipcRenderer.invoke('session:transcript', sessionId),

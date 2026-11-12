@@ -8,7 +8,21 @@ import { resolveClaudePath } from './claude';
 import { existingDir, RESUME_FULL_ENV } from './cwd';
 
 const IS_WIN = process.platform === 'win32';
-const ptys = new Map<string, { pty: nodePty.IPty; owner: number }>();
+interface PtyEntry {
+  pty: nodePty.IPty;
+  owner: number;
+  /** The renderer's tab id: a reloaded page reattaches by it instead of starting a second claude. */
+  key: string | null;
+  /** Recent output, replayed to a reattaching page so its screen comes back. */
+  buffer: string;
+  /** Swapped on reattach so output follows the new page. */
+  cb: PtyCallbacks;
+  /** Pending kill after the page let go (cancelled by a reattach). */
+  killTimer: NodeJS.Timeout | null;
+}
+const ptys = new Map<string, PtyEntry>();
+/** Output kept per terminal for a reattach (enough for a full screen plus scrollback). */
+const REPLAY_MAX = 256 * 1024;
 let seq = 0;
 
 export interface PtyCallbacks {
@@ -22,7 +36,8 @@ export function spawnPty(
   args: string[],
   opts: { cwd: string; cols: number; rows: number; env?: Record<string, string> },
   cb: PtyCallbacks,
-  owner = -1
+  owner = -1,
+  key: string | null = null
 ): string {
   const id = `pty-${++seq}-${Date.now().toString(36)}`;
   const cwd = existingDir(opts.cwd);
@@ -44,11 +59,17 @@ export function spawnPty(
     env: { ...cleanEnv(), ...opts.env },
     useConpty: true,
   });
-  ptys.set(id, { pty, owner });
-  pty.onData((data) => cb.onData(id, data));
+  const entry: PtyEntry = { pty, owner, key, buffer: '', cb, killTimer: null };
+  ptys.set(id, entry);
+  pty.onData((data) => {
+    entry.buffer += data;
+    if (entry.buffer.length > REPLAY_MAX) entry.buffer = entry.buffer.slice(-REPLAY_MAX);
+    entry.cb.onData(id, data);
+  });
   pty.onExit(({ exitCode }) => {
+    if (entry.killTimer) clearTimeout(entry.killTimer);
     ptys.delete(id);
-    cb.onExit(id, exitCode);
+    entry.cb.onExit(id, exitCode);
   });
   return id;
 }
@@ -60,6 +81,27 @@ function safeName(name: string): string {
 }
 
 /** Bridge-facing open: `shell` → powershell/$SHELL, otherwise claude [--resume id [--fork-session]] [--name n]. */
+/**
+ * A live terminal opened under this key and not yet killed: take it over (new owner + callbacks,
+ * cancel the pending kill) and hand back its recent output. Null when there is none.
+ */
+export function reattachPty(key: string, owner: number, cb: PtyCallbacks): { id: string; replay: string } | null {
+  for (const [id, entry] of ptys) {
+    if (entry.key !== key) continue;
+    if (entry.killTimer) clearTimeout(entry.killTimer);
+    entry.killTimer = null;
+    entry.owner = owner;
+    entry.cb = cb;
+    return { id, replay: entry.buffer };
+  }
+  return null;
+}
+
+/** Keys of the terminals still running (a reloaded page brings those tabs back live, not asleep). */
+export function liveKeys(): string[] {
+  return [...ptys.values()].filter((e) => e.key !== null).map((e) => e.key as string);
+}
+
 export function openPty(opts: PtyOpenOptions, owner: number, cb: PtyCallbacks, skipPermissions = false): string {
   let file: string;
   const args: string[] = [];
@@ -80,7 +122,8 @@ export function openPty(opts: PtyOpenOptions, owner: number, cb: PtyCallbacks, s
   // Waking a tab means "carry on": Claude Code otherwise stops a long, old session (> 70 min, > 100k
   // tokens) to ask "Resume from summary / full session?". Lift both limits out of reach for our resumes.
   const env = opts.resumeSessionId && !opts.shell ? RESUME_FULL_ENV : undefined;
-  return spawnPty(file, args, { cwd: opts.cwd, cols: opts.cols, rows: opts.rows, env }, cb, owner);
+  const key = typeof opts.key === 'string' && opts.key ? opts.key : null;
+  return spawnPty(file, args, { cwd: opts.cwd, cols: opts.cols, rows: opts.rows, env }, cb, owner, key);
 }
 
 /** Pids of every process we spawned — never released by "Move into the village". */
@@ -101,9 +144,19 @@ export function resizePty(id: string, cols: number, rows: number): void {
   if (cols > 0 && rows > 0) ptys.get(id)?.pty.resize(cols, rows);
 }
 
-export function closePty(id: string): void {
+/**
+ * Close a terminal. With `graceMs` the kill waits that long so a reloading / hot-reloading page can
+ * reattach (by key) to the same claude — editing the village must not cut its sessions off.
+ */
+export function closePty(id: string, graceMs = 0): void {
   const entry = ptys.get(id);
   if (!entry) return;
+  if (graceMs > 0 && entry.key !== null) {
+    if (entry.killTimer) clearTimeout(entry.killTimer);
+    entry.killTimer = setTimeout(() => closePty(id), graceMs);
+    return;
+  }
+  if (entry.killTimer) clearTimeout(entry.killTimer);
   ptys.delete(id);
   try {
     // ConPTY kill alone can leave claude.exe running headless — take the whole tree.
@@ -114,8 +167,8 @@ export function closePty(id: string): void {
   }
 }
 
-export function closeOwnedPtys(owner: number): void {
-  for (const [id, entry] of ptys) if (entry.owner === owner) closePty(id);
+export function closeOwnedPtys(owner: number, graceMs = 0): void {
+  for (const [id, entry] of ptys) if (entry.owner === owner) closePty(id, graceMs);
 }
 
 export function closeAllPtys(): void {

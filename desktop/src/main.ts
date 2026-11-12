@@ -33,6 +33,9 @@ const RELAUNCH = argv.includes('--relaunch');
 
 const DESKTOP_DIR = path.resolve(__dirname, '..');
 const IS_MAC = process.platform === 'darwin';
+/** How long a terminal outlives the page that let go of it — a reattach by tab id cancels the kill. */
+const RELOAD_GRACE_MS = 30_000;
+const CLOSE_GRACE_MS = 3_000;
 
 // Launched from Finder / the Dock / a LaunchAgent, macOS hands GUI apps a bare PATH
 // (/usr/bin:/bin:…) — bun, claude and the tools claude shells out to would all be missing.
@@ -176,8 +179,10 @@ function createWindow(): BrowserWindow {
     e.preventDefault();
     void restartApp();
   });
-  w.webContents.on('did-navigate', () => ptyModule?.closeOwnedPtys(w.webContents.id));
-  w.webContents.on('destroyed', () => ptyModule?.closeOwnedPtys(w.webContents.id));
+  // A reload (or a Vite full reload after an edit) keeps the terminals alive for a while: the new
+  // page reattaches to them by tab id. Only quitting, or nobody reattaching, ends them.
+  w.webContents.on('did-navigate', () => ptyModule?.closeOwnedPtys(w.webContents.id, RELOAD_GRACE_MS));
+  w.webContents.on('destroyed', () => ptyModule?.closeOwnedPtys(w.webContents.id, RELOAD_GRACE_MS));
   return w;
 }
 
@@ -263,23 +268,26 @@ function registerIpc(): void {
       if (o.fork === true) opts.fork = true;
     }
     if (typeof o.name === 'string' && o.name.trim()) opts.name = o.name;
+    if (typeof o.key === 'string' && /^[\w-]{1,80}$/.test(o.key)) opts.key = o.key;
     const sender = event.sender;
     const pty = loadPty();
-    const id = pty.openPty(
-      opts,
-      sender.id,
-      {
-        onData: (ptyId, data) => {
-          if (!sender.isDestroyed()) sender.send('pty:data', ptyId, data);
-        },
-        onExit: (ptyId, code) => {
-          if (!sender.isDestroyed()) sender.send('pty:exit', ptyId, code);
-        },
+    const cb = {
+      onData: (ptyId: string, data: string) => {
+        if (!sender.isDestroyed()) sender.send('pty:data', ptyId, data);
       },
-      settings.skipPermissions
-    );
+      onExit: (ptyId: string, code: number) => {
+        if (!sender.isDestroyed()) sender.send('pty:exit', ptyId, code);
+      },
+    };
+    const back = opts.key ? pty.reattachPty(opts.key, sender.id, cb) : null;
+    if (back) {
+      pty.resizePty(back.id, opts.cols, opts.rows);
+      return { id: back.id, pid: pty.ptyPid(back.id) ?? undefined, replay: back.replay };
+    }
+    const id = pty.openPty(opts, sender.id, cb, settings.skipPermissions);
     return { id, pid: pty.ptyPid(id) ?? undefined };
   });
+  ipcMain.handle('pty:live', () => ptyModule?.liveKeys() ?? []);
   ipcMain.on('pty:write', (_e, id: string, data: string) => {
     if (typeof id === 'string' && typeof data === 'string') ptyModule?.writePty(id, data);
   });
@@ -287,7 +295,8 @@ function registerIpc(): void {
     if (typeof id === 'string') ptyModule?.resizePty(id, Number(cols), Number(rows));
   });
   ipcMain.on('pty:close', (_e, id: string) => {
-    if (typeof id === 'string') ptyModule?.closePty(id);
+    // A short grace covers a hot reload re-running the terminal's effect (close → reopen by key).
+    if (typeof id === 'string') ptyModule?.closePty(id, CLOSE_GRACE_MS);
   });
 
   ipcMain.handle('session:focus', (_e, req: unknown) => focusSession(req));
