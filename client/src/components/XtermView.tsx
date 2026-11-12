@@ -61,6 +61,13 @@ function ctrlShift(e: KeyboardEvent, code: string): boolean {
   return e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.code === code;
 }
 
+/** macOS copies with ⌘C (never reaches the terminal); elsewhere Ctrl+C is both copy and interrupt. */
+const IS_MAC = typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent);
+
+function plainCtrl(e: KeyboardEvent, code: string): boolean {
+  return e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.code === code;
+}
+
 export default function XtermView({ bridge, tab, active, onPid, onMissing, onClose }: XtermViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -129,8 +136,18 @@ export default function XtermView({ bridge, tab, active, onPid, onMissing, onClo
     };
 
     // Ctrl+Shift+C/V copy/paste; Ctrl+Shift+F is the app's focus-mode toggle, not a terminal key.
+    // Windows/Linux, like Windows Terminal: Ctrl+C with a selection copies it (and clears it);
+    // without one it still reaches Claude as interrupt.
     term.attachCustomKeyEventHandler((e) => {
       if (ctrlShift(e, 'KeyF')) return false;
+      if (!IS_MAC && plainCtrl(e, 'KeyC') && term.hasSelection()) {
+        if (e.type === 'keydown') {
+          copySelection();
+          term.clearSelection();
+        }
+        e.preventDefault();
+        return false;
+      }
       if (ctrlShift(e, 'KeyC')) {
         if (e.type === 'keydown') copySelection();
         e.preventDefault();
