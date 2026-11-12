@@ -3,7 +3,7 @@
   "productName": "RTS Agents",
   "version": "0.1.0",
   "private": true,
-  "description": "Electron desktop shell for the RTS Agents village dashboard",
+  "description": "Electron desktop shell for the claude-village dashboard",
   "main": "dist/main.js",
   "scripts": {
     "postinstall": "node scripts/postinstall.js",

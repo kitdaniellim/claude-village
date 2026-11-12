@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Creates ~/Applications/RTS Agents.app — a tiny AppleScript applet around scripts/launch-desktop.sh — so the
+# Creates ~/Applications/claude-village.app — a tiny AppleScript applet around scripts/launch-desktop.sh — so the
 # village opens from Spotlight, Launchpad or the Dock. Re-run after moving the repo.
 set -euo pipefail
 [ "$(uname)" = Darwin ] || { echo "macOS only (Windows: scripts/install-windows-shortcut.ps1)" >&2; exit 1; }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP="$HOME/Applications/RTS Agents.app"
+APP="$HOME/Applications/claude-village.app"
+# The launcher used to be called "RTS Agents.app" — replace it, not keep both.
+rm -rf "$HOME/Applications/RTS Agents.app"
 
 rm -rf "$APP"
 chmod +x "$ROOT/scripts/launch-desktop.sh"
@@ -13,7 +15,7 @@ chmod +x "$ROOT/scripts/launch-desktop.sh"
 # can ask once for access to the folder holding the repo (e.g. ~/Documents) instead of failing silently.
 LAUNCH="$ROOT/scripts/launch-desktop.sh"
 osacompile -o "$APP" -e "do shell script quoted form of \"$LAUNCH\" & \" >/dev/null 2>&1\""
-/usr/libexec/PlistBuddy -c "Set :CFBundleName RTS Agents" "$APP/Contents/Info.plist" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Set :CFBundleName claude-village" "$APP/Contents/Info.plist" >/dev/null 2>&1 || true
 /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string dev.rts-agents.launcher" "$APP/Contents/Info.plist" >/dev/null 2>&1 \
   || /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier dev.rts-agents.launcher" "$APP/Contents/Info.plist"
 
@@ -25,4 +27,4 @@ ICNS="$ROOT/desktop/node_modules/electron/dist/Electron.app/Contents/Resources/e
 codesign --force --sign - "$APP" >/dev/null 2>&1 || true
 touch "$APP"
 echo "Installed: $APP"
-echo "Open it from Spotlight (⌘Space → RTS Agents) or drag it to the Dock."
+echo "Open it from Spotlight (⌘Space → claude-village) or drag it to the Dock."

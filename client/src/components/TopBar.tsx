@@ -12,6 +12,8 @@ import { STATUS_COLORS } from '../utils/spriteMapper';
 import { CREDITS, creditLine } from '../utils/credits';
 import { BagIcon, CrossedSwordsIcon, PixelIcon, WarIcon } from './PixelIcon';
 import type { PixelIconName } from './PixelIcon';
+
+const REPO_URL = 'https://github.com/kitdaniellim/claude-village';
 import './TopBar.css';
 
 export interface TopBarProps {
@@ -178,7 +180,7 @@ export default function TopBar(props: TopBarProps) {
           <span className="topbar-logo" aria-hidden="true">
             <CrossedSwordsIcon />
           </span>
-          <h1 className="topbar-title">RTS Agents</h1>
+          <h1 className="topbar-title">claude-village</h1>
           <span className={`topbar-conn topbar-conn-${connection}`} role="status">
             <span className="topbar-conn-dot" />
             {CONN_LABEL[connection]}
@@ -259,7 +261,7 @@ export default function TopBar(props: TopBarProps) {
             <HudButton icon="hammer" title="Toggle map editor" onClick={onToggleEditor} active={editor} pressed={editor} />
             <HudButton
               icon="restart"
-              title={restart ? 'Restart RTS Agents (reloads the shell, server and map)' : 'Reload page'}
+              title={restart ? 'Restart claude-village (reloads the shell, server and map)' : 'Reload page'}
               onClick={() => (restart ? restart() : window.location.reload())}
             />
             <div className="topbar-settings" ref={settingsRef}>
@@ -368,8 +370,14 @@ export default function TopBar(props: TopBarProps) {
                   <div className="topbar-popover-section">About</div>
                   <div className="topbar-popover-about">
                     {desktop.bridge
-                      ? `RTS Agents ${desktop.bridge.versions.app} · Electron ${desktop.bridge.versions.electron} · Node ${desktop.bridge.versions.node}`
-                      : 'RTS Agents · browser build'}
+                      ? `claude-village ${desktop.bridge.versions.app} · Electron ${desktop.bridge.versions.electron} · Node ${desktop.bridge.versions.node}`
+                      : 'claude-village · browser build'}
+                  </div>
+                  <div className="topbar-popover-about">
+                    Source:{' '}
+                    <a href={REPO_URL} target="_blank" rel="noreferrer">
+                      github.com/kitdaniellim/claude-village
+                    </a>
                   </div>
                   {/* CC-BY / CC-BY-SA packs need visible attribution — one row per asset pack. */}
                   {CREDITS.map((c) => (

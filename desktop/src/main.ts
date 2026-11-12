@@ -1,4 +1,4 @@
-// RTS Agents desktop shell: window + tray, boots the bun server / Vite client,
+// claude-village desktop shell: window + tray, boots the bun server / Vite client,
 // and serves the `window.rts` bridge (settings, claude path, PTYs, focus, links, restart).
 // `electron . --smoke` runs a headless self-test instead.
 
@@ -62,7 +62,7 @@ function loadPty(): PtyModule {
 
 function splashHtml(message: string, detail: string): string {
   const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-  return `<!doctype html><html><head><meta charset="utf-8"><title>RTS Agents</title><style>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>claude-village</title><style>
 html,body{height:100%;margin:0;background:#0f1117;color:#c9d1d9;font:14px/1.5 ui-monospace,Consolas,monospace}
 body{display:flex;align-items:center;justify-content:center;text-align:center}
 .sword{font-size:36px;animation:pulse 1.2s ease-in-out infinite}
@@ -137,7 +137,7 @@ function createWindow(): BrowserWindow {
     minWidth: 1100,
     minHeight: 700,
     backgroundColor: '#0f1117',
-    title: 'RTS Agents',
+    title: 'claude-village',
     icon: windowIcon(),
     show: false,
     autoHideMenuBar: true,
@@ -213,7 +213,7 @@ function refreshTrayMenu(): void {
 
 function createTray(): void {
   tray = new Tray(trayIcon());
-  tray.setToolTip('RTS Agents');
+  tray.setToolTip('claude-village');
   tray.on('click', showWindow);
   tray.on('double-click', showWindow);
   refreshTrayMenu();

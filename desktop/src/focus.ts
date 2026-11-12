@@ -92,7 +92,7 @@ public static class RtsFocus {
   }
   if (-not $wins) { $out.detail = 'No visible window found for this session (it may run headless or in a service).'; Finish }
 
-  $friendly = @{ 'WindowsTerminal.exe' = 'Windows Terminal'; 'Code.exe' = 'VS Code'; 'electron.exe' = 'RTS Agents'; 'Cursor.exe' = 'Cursor'; 'conhost.exe' = 'console window'; 'OpenConsole.exe' = 'console window'; 'cmd.exe' = 'console window'; 'powershell.exe' = 'console window'; 'pwsh.exe' = 'console window'; 'WezTerm.exe' = 'WezTerm'; 'wezterm-gui.exe' = 'WezTerm'; 'alacritty.exe' = 'Alacritty'; 'mintty.exe' = 'mintty' }
+  $friendly = @{ 'WindowsTerminal.exe' = 'Windows Terminal'; 'Code.exe' = 'VS Code'; 'electron.exe' = 'claude-village'; 'Cursor.exe' = 'Cursor'; 'conhost.exe' = 'console window'; 'OpenConsole.exe' = 'console window'; 'cmd.exe' = 'console window'; 'powershell.exe' = 'console window'; 'pwsh.exe' = 'console window'; 'WezTerm.exe' = 'WezTerm'; 'wezterm-gui.exe' = 'WezTerm'; 'alacritty.exe' = 'Alacritty'; 'mintty.exe' = 'mintty' }
   $out.app = if ($friendly.ContainsKey($hostName)) { $friendly[$hostName] } else { $hostName }
 
   $hwnd = $wins[0]

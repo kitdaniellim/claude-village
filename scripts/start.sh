@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts the RTS Agents server (port 4444) and client (port 4445) together.
+# Starts the claude-village server (port 4444) and client (port 4445) together.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

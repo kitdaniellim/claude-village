@@ -1,5 +1,5 @@
 @echo off
-rem Double-click launcher: starts the RTS Agents desktop app (server + client + Electron).
+rem Double-click launcher: starts the claude-village desktop app (server + client + Electron).
 rem Start menu / Desktop shortcut: powershell -ExecutionPolicy Bypass -File scripts\install-windows-shortcut.ps1
 cd /d "%~dp0"
 if not exist node_modules call bun install

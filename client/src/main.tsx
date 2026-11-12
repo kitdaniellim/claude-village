@@ -5,7 +5,7 @@ import './styles/global.css';
 
 const rootEl = document.getElementById('root');
 if (!rootEl) {
-  throw new Error('RTS Agents: #root element not found');
+  throw new Error('claude-village: #root element not found');
 }
 
 createRoot(rootEl).render(

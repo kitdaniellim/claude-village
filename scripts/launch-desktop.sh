@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts the RTS Agents desktop app (macOS / Linux) detached from the terminal:
+# Starts the claude-village desktop app (macOS / Linux) detached from the terminal:
 # installs missing deps on first run, rebuilds the Electron shell, then hands off to Electron
 # (which boots the server + client itself). Output goes to ~/.rts-agents/desktop.log.
 set -euo pipefail
@@ -14,7 +14,7 @@ LOG="$LOG_DIR/desktop.log"
 
 fail() {
   echo "error: $1" >&2
-  [ "$(uname)" = Darwin ] && osascript -e "display alert \"RTS Agents\" message \"$1\"" >/dev/null 2>&1 || true
+  [ "$(uname)" = Darwin ] && osascript -e "display alert \"claude-village\" message \"$1\"" >/dev/null 2>&1 || true
   exit 1
 }
 

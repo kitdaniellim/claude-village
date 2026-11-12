@@ -179,8 +179,8 @@ bun run desktop:smoke     # headless self-test: SMOKE OK <claude version>
 
 | | Install once | Then |
 |---|---|---|
-| **macOS** | `bun run launcher:mac` → `~/Applications/RTS Agents.app` | ⌘Space → *RTS Agents*, or drag it to the Dock. Double-clicking `RTS Agents.command` in Finder also works. |
-| **Windows** | `bun run launcher:win` → Desktop + Start-menu shortcuts | Start → *RTS Agents* (right-click → Pin to taskbar), or double-click `RTS Agents.cmd`. |
+| **macOS** | `bun run launcher:mac` → `~/Applications/claude-village.app` | ⌘Space → *claude-village*, or drag it to the Dock. Double-clicking `claude-village.command` in Finder also works. |
+| **Windows** | `bun run launcher:win` → Desktop + Start-menu shortcuts | Start → *claude-village* (right-click → Pin to taskbar), or double-click `claude-village.cmd`. |
 
 Both launchers install missing dependencies on first run. On macOS the app logs to
 `~/.rts-agents/desktop.log`, and **Launch on startup** writes a LaunchAgent at
