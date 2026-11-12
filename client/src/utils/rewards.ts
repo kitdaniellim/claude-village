@@ -221,11 +221,50 @@ export function cleanSummary(md: string): string {
     .trim();
 }
 
-/** First sentence-ish line for the row (the popover shows the rest). */
+/** One line for the row: the gist's lead and step headings (the popover has the rest). */
 export function summaryPreview(md: string | null): string | null {
   if (!md) return null;
-  const text = cleanSummary(md).replace(/\s*\n\s*/g, ' ');
+  const text = conciseSummary(md)
+    .split('\n')
+    .map((l) => l.replace(/^•\s*/, '').trim())
+    .filter((l) => l && !/^\+\d+ more$/.test(l))
+    .join(' · ');
   return text || null;
+}
+
+const LEAD_MAX = 170;
+const STEP_MAX = 64;
+const MAX_STEPS = 4;
+const LIST_RE = /^(?:\d+[.)]|•)\s+/;
+
+/** Cut at a word boundary with an ellipsis. */
+function clip(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), max - 12)).replace(/[\s,;:–—-]+$/, '')}…`;
+}
+
+/**
+ * The gist of a closing message: its first sentence, then one short heading per listed step
+ * ("• sif-external to master"). The popover shows this; the full text is one click away.
+ */
+export function conciseSummary(md: string): string {
+  const lines = cleanSummary(md).split('\n').filter(Boolean);
+  const prose = lines.filter((l) => !LIST_RE.test(l));
+  const firstProse = prose[0] ?? '';
+  const sentence = /^.+?[.!?](?=\s|$)/.exec(firstProse)?.[0] ?? firstProse;
+  const lead = clip(sentence, LEAD_MAX);
+  const steps = lines
+    .filter((l) => LIST_RE.test(l))
+    .slice(0, MAX_STEPS)
+    .map((l) => {
+      const body = l.replace(LIST_RE, '');
+      // The step's heading: up to its first sentence end or colon.
+      const head = /^.+?(?:[.!?:](?=\s|$))/.exec(body)?.[0].replace(/[.:]$/, '') ?? body;
+      return `• ${clip(head, STEP_MAX)}`;
+    });
+  const more = lines.filter((l) => LIST_RE.test(l)).length - steps.length;
+  return [lead, ...steps, ...(more > 0 ? [`  +${more} more`] : [])].filter(Boolean).join('\n');
 }
 
 /** Name for a quest-log row: the /rename name, else the hero's current name, else "Nameless" (never an id). */

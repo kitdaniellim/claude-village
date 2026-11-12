@@ -75,6 +75,7 @@ export default function BackpackView(props: BackpackViewProps) {
   }
 
   const hoverProps = (j: JournalEntry) => ({
+    'data-entry': j.id,
     onMouseEnter: (e: { currentTarget: HTMLElement }) => onHover(j, e.currentTarget),
     onMouseLeave: onLeave,
     onFocus: (e: { currentTarget: HTMLElement }) => onHover(j, e.currentTarget),

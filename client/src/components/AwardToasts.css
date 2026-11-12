@@ -18,6 +18,7 @@
   --rarity: var(--rarity-common);
   --glow: transparent;
   pointer-events: auto;
+  cursor: pointer;
   position: relative;
   display: flex;
   align-items: center;

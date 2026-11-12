@@ -1,11 +1,11 @@
-// Award toasts under the backpack button: icon + "+1 Iron Ore" + place and
-// session name, framed in the item's colour with a sparkle. Up to 3 stack, each auto-dismisses after 4 s,
+// Award toasts under the backpack button: icon + "+1 Iron Ore" + the hero's name (click → its
+// summary in the backpack), framed in the item's colour with a sparkle. Up to 3 stack, each auto-dismisses after 4 s,
 // and the reward jingle plays once per award (respects mute).
 
 import { useEffect, useRef, useState } from 'react';
 import type { ItemDef, JournalEntry, RewardsState } from '../types/agent';
 import type { LastAward } from '../hooks/useAgentSocket';
-import { catalogMap, homeLabel, lookupItem, resolveProjectHome } from '../utils/rewards';
+import { catalogMap, lookupItem } from '../utils/rewards';
 import { epithetTitle } from '../utils/epithet';
 import { playCueSoon } from '../utils/sound';
 import { heroColor } from '../utils/spriteMapper';
@@ -16,6 +16,8 @@ import './AwardToasts.css';
 interface AwardToastsProps {
   lastAward: LastAward | null;
   rewards: RewardsState | null;
+  /** Clicked: open the backpack on this entry's summary. */
+  onOpen?: (entryId: string) => void;
 }
 
 interface Toast {
@@ -29,7 +31,7 @@ const TOAST_MS = 4000;
 const EXIT_MS = 220;
 const MAX_TOASTS = 3;
 
-export default function AwardToasts({ lastAward, rewards }: AwardToastsProps) {
+export default function AwardToasts({ lastAward, rewards, onOpen }: AwardToastsProps) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seenNonce = useRef(0);
   const timers = useRef<number[]>([]);
@@ -68,8 +70,12 @@ export default function AwardToasts({ lastAward, rewards }: AwardToastsProps) {
         <div
           key={t.id}
           className={`toast toast-${t.item.rarity} ${t.leaving ? 'toast-leave' : ''}`}
-          onClick={() => setToasts((all) => all.filter((x) => x.id !== t.id))}
+          onClick={() => {
+            setToasts((all) => all.filter((x) => x.id !== t.id));
+            onOpen?.(t.award.id);
+          }}
           role="status"
+          title="Open the summary in the backpack"
         >
           <span className="toast-sparkle" aria-hidden="true" />
           <span className="toast-icon">
@@ -78,8 +84,6 @@ export default function AwardToasts({ lastAward, rewards }: AwardToastsProps) {
           <span className="toast-body">
             <span className="toast-title">+1 {t.item.name}</span>
             <span className="toast-sub" title={epithetTitle(t.award.sessionId, t.award.sessionName ?? t.award.shortId)}>
-              <span className="toast-place">{homeLabel(resolveProjectHome(t.award.project, t.award.cwd), t.award.project)}</span>
-              {' · '}
               {t.award.sessionName ?? t.award.shortId}
             </span>
           </span>

@@ -11,6 +11,7 @@ import type { ProjectHome } from '../utils/rewards';
 import {
   catalogMap,
   cleanSummary,
+  conciseSummary,
   clockTime,
   entryHome,
   entryName,
@@ -43,6 +44,8 @@ export interface RewardsPanelProps {
   /** Increments per award; `lastAward` is the entry that bumped it (highlight its row). */
   awardNonce: number;
   lastAward: JournalEntry | null;
+  /** An award toast was clicked: show that entry's summary (switching to All if it's filtered out). */
+  focusEntry?: { id: string; nonce: number } | null;
 }
 
 const PAGE = 30;
@@ -53,6 +56,7 @@ const POP_GAP = 10;
 const CLOSE_DELAY_MS = 160;
 
 const isMode = (v: unknown): v is BackpackMode => v === 'list' || v === 'grid';
+const isPlaceFilter = (v: unknown): v is string | null => v === null || typeof v === 'string';
 
 interface HoverState {
   entry: JournalEntry;
@@ -60,12 +64,12 @@ interface HoverState {
 }
 
 export default function RewardsPanel(props: RewardsPanelProps) {
-  const { open, onClose, rewards, agents, skewMs, onSelectAgent, onSelectPlace, awardNonce, lastAward } = props;
+  const { open, onClose, rewards, agents, skewMs, onSelectAgent, onSelectPlace, awardNonce, lastAward, focusEntry } = props;
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const closeTimer = useRef<number | undefined>(undefined);
-  const [placeFilter, setPlaceFilter] = useState<string | null>(null);
+  const [placeFilter, setPlaceFilter] = usePersistentState<string | null>('backpack-place', null, isPlaceFilter);
   const [mode, setMode] = usePersistentState<BackpackMode>('backpack-mode', 'list', isMode);
   const [hover, setHover] = useState<HoverState | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
@@ -92,9 +96,11 @@ export default function RewardsPanel(props: RewardsPanelProps) {
   const { limit, more } = usePagedLimit(entries.length, PAGE, placeFilter ?? '*');
 
   // A filtered place that the server pruned falls back to All.
+  // (Only once the log has loaded — before that every saved filter would look pruned.)
   useEffect(() => {
+    if (!rewards || places.length === 0) return;
     if (placeFilter !== null && !places.some((g) => g.place.id === placeFilter)) setPlaceFilter(null);
-  }, [places, placeFilter]);
+  }, [rewards, places, placeFilter, setPlaceFilter]);
 
   // New filter, mode or reopen starts at the top.
   useEffect(() => {
@@ -147,6 +153,28 @@ export default function RewardsPanel(props: RewardsPanelProps) {
     closeTimer.current = window.setTimeout(() => setHover(null), CLOSE_DELAY_MS);
   }, []);
   const keepOpen = useCallback(() => window.clearTimeout(closeTimer.current), []);
+
+  // Toast clicked → that entry: make sure the filter shows it, then scroll to it and pin its summary.
+  const handledFocus = useRef<{ id: string; nonce: number } | null>(null);
+  useEffect(() => {
+    if (!open || !focusEntry || handledFocus.current === focusEntry) return;
+    const entry = journal.find((j) => j.id === focusEntry.id);
+    if (!entry) return; // not in the log yet — retried when rewards update
+    if (placeFilter !== null && entryHome(entry, homes).place.id !== placeFilter) {
+      setPlaceFilter(null);
+      return; // re-runs with the unfiltered list
+    }
+    handledFocus.current = focusEntry;
+    const raf = window.requestAnimationFrame(() => {
+      const el = bodyRef.current?.querySelector<HTMLElement>(`[data-entry="${CSS.escape(entry.id)}"]`);
+      if (!el) return;
+      el.scrollIntoView({ block: 'center' });
+      setFlashId(entry.id);
+      window.setTimeout(() => setFlashId(null), FLASH_MS);
+      showHover(entry, el);
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [open, focusEntry, journal, homes, placeFilter, setPlaceFilter, showHover]);
 
   if (!open) return null;
 
@@ -246,6 +274,7 @@ export default function RewardsPanel(props: RewardsPanelProps) {
 
       {hover && (
         <EntryPopover
+          key={hover.entry.id}
           hover={hover}
           panel={rootRef.current}
           catalog={catalog}
@@ -279,7 +308,10 @@ function EntryPopover({ hover, panel, catalog, homes, agents, now, onEnter, onLe
   const item = lookupItem(catalog, j.itemId);
   const home = entryHome(j, homes);
   const name = entryName(j, agents);
-  const body = j.summary ? cleanSummary(j.summary) : null;
+  const full = j.summary ? cleanSummary(j.summary) : null;
+  const gist = j.summary ? conciseSummary(j.summary) : null;
+  const [expanded, setExpanded] = useState(false);
+  const body = expanded ? full : gist;
 
   // Hidden until measured; then beside the panel (over the map) if there's room, else under/over the row.
   const [style, setStyle] = useState<CSSProperties>({ left: 0, top: 0, visibility: 'hidden' });
@@ -304,7 +336,7 @@ function EntryPopover({ hover, panel, catalog, homes, agents, now, onEnter, onLe
     top = Math.max(8, Math.min(window.innerHeight - 8 - h, top));
     setSide(beside);
     setStyle({ left, top });
-  }, [panel, rect, j.id]);
+  }, [panel, rect, j.id, expanded]);
 
   const d = new Date(j.ts);
   const when = `${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} · ${clockTime(j.ts)}`;
@@ -319,7 +351,14 @@ function EntryPopover({ hover, panel, catalog, homes, agents, now, onEnter, onLe
       onMouseLeave={onLeave}
     >
       <div className="bp-pop-kicker">Task resolution</div>
-      <div className={`bp-pop-text ${body ? '' : 'bp-pop-text-none'}`}>{body ?? 'The hero finished without a closing word.'}</div>
+      <div className={`bp-pop-text ${body ? '' : 'bp-pop-text-none'} ${expanded ? 'bp-pop-text-full' : ''}`}>
+        {body ?? 'The hero finished without a closing word.'}
+      </div>
+      {full && gist !== full && (
+        <button type="button" className="bp-pop-more" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? 'Show less ▴' : 'Show full ▾'}
+        </button>
+      )}
       <div className="bp-pop-who">
         <Portrait sessionId={j.sessionId} color={heroColor(j.sessionId)} className="bp-pop-portrait" />
         <span className="bp-pop-id">
