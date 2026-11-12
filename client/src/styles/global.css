@@ -378,3 +378,20 @@ input {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* A panel that crashed (PanelBoundary) — the rest of the app, terminals included, keeps running. */
+.panel-crash {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: var(--fs-sm);
+  color: #fecaca;
+  background: var(--bg-1);
+  border: 1px solid #f87171;
+}
+
+.panel-crash code {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}

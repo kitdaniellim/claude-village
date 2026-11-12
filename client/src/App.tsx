@@ -18,6 +18,7 @@ import ActivityFeed from './components/ActivityFeed';
 import Village from './components/Village';
 import type { FocusRequest } from './components/Village';
 import TerminalPanel from './components/TerminalPanel';
+import PanelBoundary from './components/PanelBoundary';
 import type { MoveRequest, MoveStatus, PlaceRequest, RallyRequest } from './components/TerminalPanel';
 import type { RallySession } from './types/agent';
 import type { SleepingHero } from './utils/terminalTabs';
@@ -243,70 +244,86 @@ export default function App() {
     : drawerOpen
       ? `${PARTY_W}px minmax(0, 1fr) ${drawerWidth}px`
       : `${PARTY_W}px minmax(0, 1fr)`;
-  const toasts = <AwardToasts lastAward={lastAward} rewards={rewards} />;
+  // Award toast clicked → backpack open on that entry's summary.
+  const [rewardsFocus, setRewardsFocus] = useState<{ id: string; nonce: number } | null>(null);
+  const openAwardEntry = useCallback((id: string) => {
+    setRewardsOpen(true);
+    setRewardsFocus((prev) => ({ id, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, []);
+  const toasts = (
+    <PanelBoundary name="Award toasts">
+      <AwardToasts lastAward={lastAward} rewards={rewards} onOpen={openAwardEntry} />
+    </PanelBoundary>
+  );
 
   return (
     <div className="app" data-feed={feed.mode}>
-      <TopBar
-        connection={connection}
-        agents={agents}
-        night={night}
-        onToggleNight={() => setNight((v) => !v)}
-        editor={editor}
-        onToggleEditor={() => setEditor((v) => !v)}
-        scaleMode={scaleMode}
-        onScaleMode={setScaleMode}
-        showGrid={showGrid}
-        onShowGrid={setShowGrid}
-        sound={sound.enabled}
-        onToggleSound={sound.toggle}
-        desktop={desktop}
-        feedMode={feed.mode}
-        feedUnread={feedUnread}
-        onToggleFeed={() => feed.setMode(feed.mode === 'closed' ? 'open' : 'closed')}
-        rewardsOpen={rewardsOpen}
-        onToggleRewards={toggleRewards}
-        itemCount={rewards?.journal.length ?? 0}
-        awardNonce={lastAward?.nonce ?? 0}
-        war={war}
-        onToggleWar={() => setWar((v) => !v)}
-      />
-      <main className={`app-main ${focusActive ? 'app-main-focus' : ''}`} style={{ gridTemplateColumns: columns }}>
-        <PartyBar
-          agents={partyAgents}
-          skewMs={skewMs}
-          selectedSessionId={selectedSessionId}
-          onSelect={handleSelectAgent}
-          filterRef={filterRef}
-          onCreateParty={handleCreateParty}
-          sleepers={sleepers}
-          rally={rally}
-          onRally={handleRally}
-          moveStatus={moveStatus}
-          onMove={handleMove}
-          onCancelMove={handleCancelMove}
-          onRestartApp={desktop.bridge ? () => desktop.bridge?.restart() : null}
-          onDismiss={handleDismiss}
+      <PanelBoundary name="Top bar">
+        <TopBar
+          connection={connection}
+          agents={agents}
+          night={night}
+          onToggleNight={() => setNight((v) => !v)}
+          editor={editor}
+          onToggleEditor={() => setEditor((v) => !v)}
+          scaleMode={scaleMode}
+          onScaleMode={setScaleMode}
+          showGrid={showGrid}
+          onShowGrid={setShowGrid}
+          sound={sound.enabled}
+          onToggleSound={sound.toggle}
+          desktop={desktop}
+          feedMode={feed.mode}
+          feedUnread={feedUnread}
+          onToggleFeed={() => feed.setMode(feed.mode === 'closed' ? 'open' : 'closed')}
+          rewardsOpen={rewardsOpen}
+          onToggleRewards={toggleRewards}
+          itemCount={rewards?.journal.length ?? 0}
+          awardNonce={lastAward?.nonce ?? 0}
+          war={war}
+          onToggleWar={() => setWar((v) => !v)}
         />
+      </PanelBoundary>
+      <main className={`app-main ${focusActive ? 'app-main-focus' : ''}`} style={{ gridTemplateColumns: columns }}>
+        <PanelBoundary name="Party">
+          <PartyBar
+            agents={partyAgents}
+            skewMs={skewMs}
+            selectedSessionId={selectedSessionId}
+            onSelect={handleSelectAgent}
+            filterRef={filterRef}
+            onCreateParty={handleCreateParty}
+            sleepers={sleepers}
+            rally={rally}
+            onRally={handleRally}
+            moveStatus={moveStatus}
+            onMove={handleMove}
+            onCancelMove={handleCancelMove}
+            onRestartApp={desktop.bridge ? () => desktop.bridge?.restart() : null}
+            onDismiss={handleDismiss}
+          />
+        </PanelBoundary>
         {focusActive && toasts}
         <div className={`app-village ${focusActive ? 'app-village-preview' : ''}`}>
           {!focusActive && toasts}
-          <Village
-            agents={agents}
-            claudeDirs={claudeDirs}
-            connection={connection}
-            night={night}
-            editor={editor}
-            showGrid={showGrid}
-            scaleMode={scaleMode}
-            layout={layout}
-            onLayoutChange={handleLayoutChange}
-            focus={focus}
-            selectedSessionId={selectedSessionId}
-            onSelectAgent={handleSelectAgent}
-            onSelectPlace={handleSelectPlace}
-            war={war}
-          />
+          <PanelBoundary name="Village map">
+            <Village
+              agents={agents}
+              claudeDirs={claudeDirs}
+              connection={connection}
+              night={night}
+              editor={editor}
+              showGrid={showGrid}
+              scaleMode={scaleMode}
+              layout={layout}
+              onLayoutChange={handleLayoutChange}
+              focus={focus}
+              selectedSessionId={selectedSessionId}
+              onSelectAgent={handleSelectAgent}
+              onSelectPlace={handleSelectPlace}
+              war={war}
+            />
+          </PanelBoundary>
           <div className="app-vignette" aria-hidden="true" />
           {focusActive && (
             <button
@@ -321,17 +338,20 @@ export default function App() {
           {editor && (
             <MapEditor onReset={handleResetLayout} onClose={() => setEditor(false)} />
           )}
-          <RewardsPanel
-            open={rewardsOpen && !focusActive}
-            onClose={closeRewards}
-            rewards={rewards}
-            agents={agents}
-            skewMs={skewMs}
-            onSelectAgent={handleSelectAgent}
-            onSelectPlace={handleSelectPlace}
-            awardNonce={lastAward?.nonce ?? 0}
-            lastAward={lastAward?.award ?? null}
-          />
+          <PanelBoundary name="Backpack">
+            <RewardsPanel
+              open={rewardsOpen && !focusActive}
+              onClose={closeRewards}
+              rewards={rewards}
+              agents={agents}
+              skewMs={skewMs}
+              onSelectAgent={handleSelectAgent}
+              onSelectPlace={handleSelectPlace}
+              awardNonce={lastAward?.nonce ?? 0}
+              lastAward={lastAward?.award ?? null}
+              focusEntry={rewardsFocus}
+            />
+          </PanelBoundary>
         </div>
         <TerminalPanel
           open={drawerOpen}
@@ -355,12 +375,14 @@ export default function App() {
           onActiveChange={handleActiveChange}
         />
       </main>
-      <ActivityFeed
-        events={events}
-        mode={feed.mode}
-        unread={feedUnread}
-        onMode={feed.setMode}
-      />
+      <PanelBoundary name="Activity feed">
+        <ActivityFeed
+          events={events}
+          mode={feed.mode}
+          unread={feedUnread}
+          onMode={feed.setMode}
+        />
+      </PanelBoundary>
     </div>
   );
 }
