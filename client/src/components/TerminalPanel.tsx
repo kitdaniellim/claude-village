@@ -1089,14 +1089,16 @@ export default function TerminalPanel(props: TerminalPanelProps) {
           ) : null}
         </span>
         <span className="drawer-actions">
-          {active && active.kind === 'resume' && active.sessionId && !active.missing && bridge?.popOutSession && (
+          {/* Focus · Fetch Squire · Pop out, left to right — Pop out sits top-right, next to hide. */}
+          {active && (
             <button
               type="button"
-              className="drawer-btn"
-              onClick={() => popOut(active)}
-              title="Pop out — continue this session in its own terminal window, safe from village restarts"
+              className={`drawer-btn ${focusMode ? 'drawer-btn-on' : ''}`}
+              onClick={onToggleFocus}
+              aria-pressed={focusMode}
+              title={focusMode ? 'Exit focus mode (Ctrl+Shift+F)' : 'Focus mode — terminal fills the screen (Ctrl+Shift+F)'}
             >
-              ⇱ Pop out
+              {focusMode ? '⤡ Exit focus' : '⤢ Focus'}
             </button>
           )}
           {active && activeView && active.kind === 'resume' && !active.missing && (
@@ -1109,15 +1111,14 @@ export default function TerminalPanel(props: TerminalPanelProps) {
               ⚔ Fetch Squire <span className="drawer-btn-muted">(Fork)</span>
             </button>
           )}
-          {active && (
+          {active && active.kind === 'resume' && active.sessionId && !active.missing && bridge?.popOutSession && (
             <button
               type="button"
-              className={`drawer-btn ${focusMode ? 'drawer-btn-on' : ''}`}
-              onClick={onToggleFocus}
-              aria-pressed={focusMode}
-              title={focusMode ? 'Exit focus mode (Ctrl+Shift+F)' : 'Focus mode — terminal fills the screen (Ctrl+Shift+F)'}
+              className="drawer-btn"
+              onClick={() => popOut(active)}
+              title="Pop out — continue this session in its own terminal window, safe from village restarts"
             >
-              {focusMode ? '⤡ Exit focus' : '⤢ Focus'}
+              ⇱ Pop out
             </button>
           )}
           <button
