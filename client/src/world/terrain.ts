@@ -17,6 +17,10 @@ import { ROAD_BLEED, buildRoads, paintRoads, rectNearRoad, roadPaintedAt, roadSd
 import type { RoadNet } from './roads';
 import { DIRT_DARK, SPR, WATER, drawSpriteAt, ellipseMask, onTilesetReady, paintAutotile, paintGrass, spriteBox, tilesetReady } from './tileset';
 import type { SpriteRef } from './tileset';
+import { biomeOfPlace, biomeWeight, buildBiomes, dominantBiome, paintBiomeOverlay, paintGroundFlowers, paintLavaPools, placeLavaPools } from './biomes';
+import type { BiomeField, BiomeId, LavaPool } from './biomes';
+import { buildWater, paintWater, waterAt, waterHitsRect } from './water';
+import type { WaterGeom } from './water';
 
 export type LayoutTiles = Record<string, TilePos>;
 
@@ -34,6 +38,17 @@ export interface World {
   dynamicBlockers: Rect[];
   /** Every decoration's full drawn box (trees with canopy, bushes, rocks, the pond): for big bodies like the dragon. */
   decor: Rect[];
+  /**
+   * The river (see water.ts). `water.mask` is the coarse (4 px cell) walk-block grid, `water.depth` a per-pixel
+   * grid (> 0 inside the river, index y * WORLD_W + x), `water.path` / `water.halfW` the centreline and half-widths,
+   * `water.bridges` the decks (walkable) and `water.shine` the static glint spots the ambient layer can animate.
+   * Query with `waterAt(world.water, x, y)` / `waterHitsRect`.
+   */
+  water: WaterGeom;
+  /** Static lava pools beside every lair (ellipses, world px): the ambient layer can add a glow over them. Not walkable. */
+  lava: LavaPool[];
+  /** Soft biome blend per place (see biomes.ts): `dominantBiome(world.biomes, x, y)` / `biomeWeight(...)`. */
+  biomes: BiomeField;
 }
 
 /** Resolve every place's tile position: saved layout → static default → next free wild slot. */
@@ -66,12 +81,20 @@ export function buildWorld(defs: PlaceDef[], layout: LayoutTiles): World {
   const places: PlaceGeom[] = [tavern, ...defs.map((d) => computePlaceGeom(d, tiles.get(d.id) ?? { tx: 2, ty: 2 }))];
   const byId = new Map(places.map((p) => [p.id, p]));
   const roads = buildRoads(tavern, places, WORLD_SEED);
+  const biomes = buildBiomes(places, WORLD_SEED);
+  const water = buildWater(places, roads, WORLD_SEED);
+  const lava = placeLavaPools(places, WORLD_SEED, (box) => {
+    const pl = tavern.plaza;
+    if (pl && box.x < pl.c.x + pl.r && box.x + box.w > pl.c.x - pl.r && box.y < pl.c.y + pl.r && box.y + box.h > pl.c.y - pl.r) return false;
+    if (box.x < 4 || box.y < 4 || box.x + box.w > WORLD_W - 4 || box.y + box.h > WORLD_H - 4) return false;
+    return !places.some((g) => rectsOverlap(box, g.rect)) && !rectNearRoad(roads, box, ROAD_BLEED + 6) && !waterHitsRect(water, box, 8);
+  });
 
   const cv = document.createElement('canvas');
   cv.width = WORLD_W;
   cv.height = WORLD_H;
   const ctx = cv.getContext('2d');
-  const world: World = { canvas: cv, tavern, places, byId, roads, tufts: [], pond: null, blockers: [], dynamicBlockers: [], decor: [] };
+  const world: World = { canvas: cv, tavern, places, byId, roads, tufts: [], pond: null, blockers: [], dynamicBlockers: [], decor: [], water, lava, biomes };
   if (!ctx) return world;
   paintWorld(ctx, world);
   // the atlas normally lands within a frame or two: repaint this same canvas when it does
@@ -92,6 +115,7 @@ function paintWorld(ctx: CanvasRenderingContext2D, world: World): void {
   const rng = mulberry32(WORLD_SEED);
   if (tiles) paintTileGround(ctx, world, rng);
   else paintPixelGround(ctx, world, rng);
+  paintWater(ctx, world.water, WORLD_SEED);
 
   const ordered = [...world.places].sort((a, b) => a.rect.y - b.rect.y);
   for (const g of ordered) drawPlaceStatic(ctx, g);
@@ -118,8 +142,16 @@ function paintTileGround(ctx: CanvasRenderingContext2D, world: World, rng: () =>
       }
     }
   }
+  paintBiomes(ctx, world);
   // roads: one distance-field ribbon for main + side paths so junctions merge cleanly
   paintRoads(ctx, world.roads);
+}
+
+/** Biome tint, flowers and lava pools over the grass (both art sources), before the roads go down. */
+function paintBiomes(ctx: CanvasRenderingContext2D, world: World): void {
+  paintBiomeOverlay(ctx, world.biomes);
+  paintGroundFlowers(ctx, world.biomes);
+  paintLavaPools(ctx, world.lava, WORLD_SEED);
 }
 
 /** Pre-atlas grass + roads (also the fallback if the atlas fails to load). */
@@ -163,6 +195,7 @@ function paintPixelGround(ctx: CanvasRenderingContext2D, world: World, rng: () =
       ctx.fillRect(x, y, 2, 1);
     }
   }
+  paintBiomes(ctx, world);
   paintRoads(ctx, world.roads);
 }
 
@@ -177,6 +210,11 @@ const ROCKS: SpriteRef[] = [SPR.rockSand, SPR.rockSand2, SPR.rockDark, SPR.rockG
 const CROPS: SpriteRef[] = [SPR.cabbage, SPR.tomato, SPR.carrot, SPR.potato, SPR.cucumber, SPR.berryBush, SPR.sprout2, SPR.tomato2];
 const DUNGEON_ROCKS: SpriteRef[] = [SPR.rockDarkBig, SPR.rockDark, SPR.rockGreyBig, SPR.rockGrey, SPR.rockDarkSmall, SPR.pebblesDark2];
 const LAIR_ROCKS: SpriteRef[] = [SPR.rockSandBig, SPR.rockSandBig2, SPR.rockSandTall, SPR.rockGrey, SPR.rockSand, SPR.rockDark];
+
+const PINES: SpriteRef[] = [SPR.pine, SPR.pineTall, SPR.pineTrunked, SPR.pine];
+const LEAFY: SpriteRef[] = [SPR.greenTree, SPR.oak, SPR.greenTree, SPR.bushBig];
+const STONE_ROCKS: SpriteRef[] = [SPR.rockGreyBig, SPR.rockGrey, SPR.rockDark, SPR.rockGrey, SPR.rockDarkSmall, SPR.pebblesDark];
+const DARK_ROCKS: SpriteRef[] = [SPR.rockDarkBig, SPR.rockDark, SPR.rockDarkSmall, SPR.rockDarkBig, SPR.pebblesDark2, SPR.rockGreyBig];
 
 const pick = <T,>(arr: T[], rng: () => number, fallback: T): T => arr[Math.floor(rng() * arr.length)] ?? fallback;
 
@@ -219,8 +257,15 @@ function paintDecorations(ctx: CanvasRenderingContext2D, world: World, tiles: bo
       const ry = plaza.r * 0.82;
       if (x1 > plaza.c.x - plaza.r && x0 < plaza.c.x + plaza.r && y1 > plaza.c.y - ry && y0 < plaza.c.y + ry) return false;
     }
-    return !rectNearRoad(roads, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, ROAD_BLEED);
+    const grown: Rect = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    if (waterHitsRect(world.water, grown, 4)) return false;
+    for (const l of world.lava) if (x1 > l.x - l.rx - 4 && x0 < l.x + l.rx + 4 && y1 > l.y - l.ry - 4 && y0 < l.y + l.ry + 4) return false;
+    return !rectNearRoad(roads, grown, ROAD_BLEED);
   };
+  const biomeAt = (x: number, y: number): BiomeId => dominantBiome(world.biomes, x, y);
+  const weight = (x: number, y: number, id: BiomeId): number => biomeWeight(world.biomes, x, y, id);
+  /** Probability gate by biome: true when a decoration of this class may stand at (x, y). */
+  const allow = (x: number, y: number, odds: Partial<Record<BiomeId, number>>, rng: () => number): boolean => (odds[biomeAt(x, y)] ?? 1) > rng();
   const free = (b: DecorBox): boolean =>
     placed.every((o) => {
       const gap = decorGap(b, o);
@@ -240,7 +285,7 @@ function paintDecorations(ctx: CanvasRenderingContext2D, world: World, tiles: bo
       // tile cells whose centre is inside the ellipse reach up to 8 px past it
       const pad = tiles ? 8 : 2;
       const box: DecorBox = { x: x - rx - pad, y: y - ry - pad, w: 2 * (rx + pad), h: 2 * (ry + pad), kind: 'pond' };
-      if (!fits(box, 12)) continue;
+      if (!fits(box, 12) || !allow(x, y, { stone: 0.15, badlands: 0, scorched: 0 }, deco)) continue;
       placed.push(box);
       world.pond = { x, y, rx, ry };
       if (tiles) paintTilePond(ctx, x, y, rx, ry, deco);
@@ -253,13 +298,20 @@ function paintDecorations(ctx: CanvasRenderingContext2D, world: World, tiles: bo
   let plots = 0;
   const plotMask = tiles ? new Uint8Array(TILES_X * TILES_Y) : null;
   const plotPlants: Array<{ x: number; y: number; spr: SpriteRef }> = [];
-  for (let i = 0; i < 160 && plots < 3; i++) {
+  const farm = places.find((g) => biomeOfPlace(g) === 'lush') ?? null;
+  for (let i = 0; i < 400 && plots < 3; i++) {
     const cols = 4 + Math.floor(deco() * 3);
     const rowsN = 3 + Math.floor(deco() * 2);
     const pw = cols * 8;
     const ph = rowsN * 7;
-    const x = 24 + Math.floor(deco() * (WORLD_W - 48 - pw));
-    const y = 24 + Math.floor(deco() * (WORLD_H - 48 - ph));
+    let x = 24 + Math.floor(deco() * (WORLD_W - 48 - pw));
+    let y = 24 + Math.floor(deco() * (WORLD_H - 48 - ph));
+    if (farm && i < 300) {
+      // fields belong around the farm town, on the lush ground
+      x = Math.round(farm.rect.x - 150 + deco() * (farm.rect.w + 300));
+      y = Math.round(farm.rect.y - 120 + deco() * (farm.rect.h + 240));
+      if (x < 24 || y < 24 || x + pw > WORLD_W - 24 || y + ph > WORLD_H - 24 || weight(x + pw / 2, y + ph / 2, 'lush') < 0.35) continue;
+    }
     if (plotMask) {
       const tx0 = Math.round(x / TILE);
       const ty0 = Math.round(y / TILE);
@@ -306,9 +358,12 @@ function paintDecorations(ctx: CanvasRenderingContext2D, world: World, tiles: bo
 
   // tree clusters: 2-3 trees side by side with clear gaps between canopies (now and then a lone tree)
   let clusters = 0;
-  for (let i = 0; i < 400 && clusters < 24; i++) {
+  for (let i = 0; i < 900 && clusters < 26; i++) {
     const x = 24 + Math.floor(deco() * (WORLD_W - 48));
     const y = 44 + Math.floor(deco() * (WORLD_H - 70));
+    // biome decides whether trees grow here at all (rare in the stone / ash / badlands, pines up high)
+    const biome = biomeAt(x, y);
+    if (!allow(x, y, { stone: 0.3, badlands: 0.02, scorched: 0.02, meadow: 0.55, worn: 0.5 }, deco)) continue;
     const count = 2 + (deco() < 0.45 ? 1 : 0);
     const loneOk = deco() < 0.25;
     const group: Array<{ x: number; y: number; r: number; spr: SpriteRef; box: DecorBox }> = [];
@@ -316,7 +371,16 @@ function paintDecorations(ctx: CanvasRenderingContext2D, world: World, tiles: bo
       tiles ? sbox(spr, sx, sy + 4, 'tree') : { x: sx - r - 4, y: sy - 2 * r - 6, w: 2 * r + 8, h: 2 * r + 10, kind: 'tree' };
     for (let n = 0; n < count; n++) {
       const r = 8 + Math.floor(deco() * 5);
-      const spr = r >= 12 ? pick(TREE_BIG, deco, SPR.pine) : r >= 10 ? pick(TREE_MID, deco, SPR.pine) : pick(TREE_SMALL, deco, SPR.greenTree);
+      const spr =
+        biome === 'stone' || biome === 'badlands' || biome === 'scorched'
+          ? pick(PINES, deco, SPR.pine)
+          : biome === 'lush' || biome === 'meadow'
+            ? pick(LEAFY, deco, SPR.greenTree)
+            : r >= 12
+              ? pick(TREE_BIG, deco, SPR.pine)
+              : r >= 10
+                ? pick(TREE_MID, deco, SPR.pine)
+                : pick(TREE_SMALL, deco, SPR.greenTree);
       const w = treeBox(spr, r, 0, 0).w;
       for (let t = 0; t < 4; t++) {
         // first tree at the cluster centre, the rest just beside a tree already in the group
@@ -347,11 +411,12 @@ function paintDecorations(ctx: CanvasRenderingContext2D, world: World, tiles: bo
   // boulders ringing the dungeon and lair hills (tile art only), never stacked
   if (tiles) {
     for (const g of places) {
-      if (g.kind !== 'dungeon' && g.kind !== 'lair') continue;
-      const bank = g.kind === 'dungeon' ? DUNGEON_ROCKS : LAIR_ROCKS;
+      const home = biomeOfPlace(g);
+      if (home !== 'badlands' && home !== 'scorched' && home !== 'stone') continue;
+      const bank = home === 'badlands' ? DUNGEON_ROCKS : home === 'scorched' ? LAIR_ROCKS : STONE_ROCKS;
       const r = g.rect;
       let n = 0;
-      for (let i = 0; i < 80 && n < 8; i++) {
+      for (let i = 0; i < 100 && n < (home === 'stone' ? 10 : 8); i++) {
         // a point just outside one of the four sides
         const side = Math.floor(deco() * 4);
         const along = deco();
@@ -370,12 +435,15 @@ function paintDecorations(ctx: CanvasRenderingContext2D, world: World, tiles: bo
 
   // mossy rocks, one per spot
   let rocks = 0;
-  for (let i = 0; i < 200 && rocks < 14; i++) {
+  for (let i = 0; i < 700 && rocks < 44; i++) {
     const x = 16 + Math.floor(deco() * (WORLD_W - 32));
     const y = 16 + Math.floor(deco() * (WORLD_H - 32));
     const w = 6 + Math.floor(deco() * 5);
     const h = 4 + Math.floor(deco() * 3);
-    const spr = tiles ? pick(ROCKS, deco, SPR.rockGrey) : null;
+    // rocks gather in the stone / badland / ash country and thin out in the green
+    if (!allow(x, y, { base: 0.22, lush: 0.08, meadow: 0.1, worn: 0.1, stone: 0.9, badlands: 1, scorched: 1 }, deco)) continue;
+    const rb = biomeAt(x, y);
+    const spr = tiles ? pick(rb === 'stone' ? STONE_ROCKS : rb === 'badlands' || rb === 'scorched' ? DARK_ROCKS : ROCKS, deco, SPR.rockGrey) : null;
     const box: DecorBox = spr ? sbox(spr, x, y + h, 'rock') : { x: x - w, y: y - h, w: w * 2, h: h * 2 + 1, kind: 'rock' };
     if (!fits(box, 6)) continue;
     rocks++;
@@ -397,9 +465,10 @@ function paintDecorations(ctx: CanvasRenderingContext2D, world: World, tiles: bo
 
   // bushes
   let bushes = 0;
-  for (let i = 0; i < 200 && bushes < 22; i++) {
+  for (let i = 0; i < 500 && bushes < 26; i++) {
     const x = 12 + Math.floor(deco() * (WORLD_W - 24));
     const y = 16 + Math.floor(deco() * (WORLD_H - 28));
+    if (!allow(x, y, { stone: 0.12, badlands: 0.04, scorched: 0, lush: 1.2, meadow: 0.8 }, deco)) continue;
     const spr = pick(BUSHES, deco, SPR.bushBerry);
     const box: DecorBox = tiles ? sbox(spr, x, y + 6, 'bush') : { x: x - 6, y: y - 6, w: 12, h: 12, kind: 'bush' };
     if (!fits(box, 4)) continue;
@@ -418,9 +487,10 @@ function paintDecorations(ctx: CanvasRenderingContext2D, world: World, tiles: bo
   // small plants / flowers (the grass tiles already carry flowered variants)
   const flowerColors = ['#f2f2f2', '#f2c14e', '#e2737f', '#e8a2c8'];
   let plants = 0;
-  for (let i = 0; i < 180 && plants < (tiles ? 36 : 90); i++) {
+  for (let i = 0; i < 500 && plants < (tiles ? 56 : 90); i++) {
     const x = 12 + Math.floor(deco() * (WORLD_W - 24));
     const y = 14 + Math.floor(deco() * (WORLD_H - 24));
+    if (!allow(x, y, { stone: 0.08, badlands: 0.04, scorched: 0, base: 0.5 }, deco)) continue;
     const spr = pick(PLANTS, deco, SPR.sprout);
     const box: DecorBox = tiles ? sbox(spr, x, y + 6, 'plant') : { x: x - 1, y: y - 2, w: 2, h: 4, kind: 'plant' };
     if (!fits(box, 3)) continue;
@@ -441,6 +511,7 @@ function paintDecorations(ctx: CanvasRenderingContext2D, world: World, tiles: bo
     const x = 10 + Math.floor(deco() * (WORLD_W - 20));
     const y = 10 + Math.floor(deco() * (WORLD_H - 20));
     if (!clearGround({ x: x - 2, y: y - 4, w: 4, h: 5 }, 3)) continue;
+    if (weight(x, y, 'stone') + weight(x, y, 'badlands') + weight(x, y, 'scorched') > 0.25) continue;
     if (placed.some((o) => x > o.x - 3 && x < o.x + o.w + 3 && y > o.y - 3 && y < o.y + o.h + 6)) continue;
     world.tufts.push({ x, y });
   }
@@ -533,6 +604,13 @@ export function isWalkable(world: World, x: number, y: number, margin = 8): bool
     const dy = (y - p.y) / (p.ry + margin);
     if (dx * dx + dy * dy < 1) return false;
   }
+  // the river (bank included) is not walkable except on a bridge deck; lava pools never
+  if (waterAt(world.water, x, y, Math.min(margin, 3))) return false;
+  for (const l of world.lava) {
+    const dx = (x - l.x) / (l.rx + 3);
+    const dy = (y - l.y) / (l.ry + 3);
+    if (dx * dx + dy * dy < 1) return false;
+  }
   for (const b of world.blockers) if (x > b.x - 2 && x < b.x + b.w + 2 && y > b.y - 2 && y < b.y + b.h + 2) return false;
   for (const b of world.dynamicBlockers) if (x > b.x - 4 && x < b.x + b.w + 4 && y > b.y - 4 && y < b.y + b.h + 4) return false;
   for (const g of world.places) {
@@ -551,6 +629,8 @@ export function bodyClear(world: World, r: Rect): boolean {
   if (world.decor.some(hit) || world.places.some((g) => hit(g.rect))) return false;
   // place-name banners hang just above their anchor (about 100 x 28 px at fit zoom)
   if (world.places.some((g) => hit({ x: g.bannerAt.x - 52, y: g.bannerAt.y - 30, w: 104, h: 34 }))) return false;
+  if (waterHitsRect(world.water, r, 4)) return false;
+  if (world.lava.some((l) => hit({ x: l.x - l.rx - 3, y: l.y - l.ry - 3, w: 2 * l.rx + 6, h: 2 * l.ry + 6 }))) return false;
   const p = world.pond;
   if (p && hit({ x: p.x - p.rx - 6, y: p.y - p.ry - 6, w: 2 * (p.rx + 6), h: 2 * (p.ry + 6) })) return false;
   return true;
