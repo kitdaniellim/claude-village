@@ -25,6 +25,7 @@ import { bodyClear, buildWorld, isWalkable, nearestWalkable } from '../world/ter
 import type { World } from '../world/terrain';
 import { createAmbient, drawAmbientBack, drawAmbientFront, emitSparkBurst, updateAmbient } from '../world/ambient';
 import type { AmbientState } from '../world/ambient';
+import { summarizeHeroes } from '../world/ambientLife';
 import { drawDragon, drawHero, drawTypingBubble, startDodge, syncHeroStatus } from '../world/actors';
 import { createDragonPlay, dragonFootprint, dragonPlayActive, dragonPlaySortY, drawDragonFx, drawDragonPlay, petFacing, preloadDragonPlay, updateDragonPlay } from '../world/dragonPlay';
 import { TYPING_EVENT } from '../utils/typing';
@@ -945,6 +946,12 @@ export default function Village(props: VillageProps) {
         // while she is down (petted / asleep) nobody stands, spawns or fights on her
         const fp = dragonFootprint(dp);
         world.dynamicBlockers = fp ? [fp] : [];
+      }
+      // busy / your-turn glow targets for the places (2 Hz; heroes are drawn at hero.placeId, your-turn ones rest at the tavern so resolve their project)
+      st.life.sinceSummary += dt;
+      if (st.life.sinceSummary > 0.5) {
+        st.life.sinceSummary = 0;
+        summarizeHeroes(st.life, heroes.values(), (h) => resolveAgentPlace(h.agent, getWild())?.place.id ?? null);
       }
       updateAmbient(st, world, dt, t, night);
 

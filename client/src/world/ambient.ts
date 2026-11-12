@@ -7,6 +7,8 @@ import { WORLD_H, WORLD_W } from './constants';
 import { drawMatrix, mulberry32 } from './pixel';
 import type { Pt } from './pixel';
 import type { World } from './terrain';
+import { createLife, drawLifeFront, drawLifeGround, drawLifeLights, updateLife, windAt } from './ambientLife';
+import type { LifeState } from './ambientLife';
 
 export interface Particle {
   x: number;
@@ -44,6 +46,8 @@ export interface AmbientState {
   fireflies: Firefly[];
   smokeAcc: number;
   reduced: boolean;
+  /** living-world extras (ambientLife.ts): busy glow, beacons, volcano, fireflies, water */
+  life: LifeState;
 }
 
 export function createAmbient(reduced: boolean): AmbientState {
@@ -52,7 +56,7 @@ export function createAmbient(reduced: boolean): AmbientState {
   for (let i = 0; i < 28; i++) {
     fireflies.push({ x: rng() * WORLD_W, y: rng() * WORLD_H, phase: rng() * Math.PI * 2, speed: 0.4 + rng() * 0.8 });
   }
-  return { particles: [], birds: [], nextBirdAt: 4, fireflies, smokeAcc: 0, reduced };
+  return { particles: [], birds: [], nextBirdAt: 4, fireflies, smokeAcc: 0, reduced, life: createLife(reduced) };
 }
 
 const BIRD_PALETTE = { b: '#2b2a33' };
@@ -89,11 +93,12 @@ export function updateAmbient(st: AmbientState, world: World, dt: number, t: num
     st.smokeAcc = 0;
     for (const g of world.places) {
       for (const c of g.chimneys) {
-        spawn(st, { x: c.x + 1, y: c.y, vx: 3 + Math.random() * 4, vy: -11 - Math.random() * 5, age: 0, ttl: 3.2, size: 2, color: '#d9d4cc', kind: 'smoke', grow: 2.2 });
+        spawn(st, { x: c.x + 1, y: c.y, vx: windAt(t) * 0.8 + Math.random() * 3, vy: -11 - Math.random() * 5, age: 0, ttl: 3.2, size: 2, color: '#d9d4cc', kind: 'smoke', grow: 2.2 });
       }
     }
   }
 
+  updateLife(st.life, world, dt, t, night);
   if (st.reduced) return;
 
   // birds: a small V crossing the sky every 9–16 s
@@ -122,6 +127,7 @@ export function updateAmbient(st: AmbientState, world: World, dt: number, t: num
 export function drawAmbientBack(ctx: CanvasRenderingContext2D, st: AmbientState, world: World, t: number, night: number, pass: 'ground' | 'lights'): void {
   if (pass === 'lights') {
     drawLights(ctx, st, world, t, night);
+    drawLifeLights(ctx, st.life, world, t, night);
     return;
   }
   // grass sway: a blade that leans with a slow wave
@@ -148,6 +154,7 @@ export function drawAmbientBack(ctx: CanvasRenderingContext2D, st: AmbientState,
       ctx.fillRect(px, py, 3, 1);
     }
   }
+  drawLifeGround(ctx, st.life, world, t);
   // lit-window sprite variants fade in under the night tint
   if (night > 0.03) {
     ctx.globalAlpha = night;
@@ -259,6 +266,7 @@ export function drawAmbientFront(ctx: CanvasRenderingContext2D, st: AmbientState
     ctx.fillRect(Math.round(p.x - s / 2), Math.round(p.y - s / 2), s, s);
   }
   ctx.globalAlpha = 1;
+  drawLifeFront(ctx, st.life, world, t, night);
   if (st.reduced) return;
   // birds
   const frame = Math.floor(t * 6) % 2;
@@ -275,17 +283,6 @@ export function drawAmbientFront(ctx: CanvasRenderingContext2D, st: AmbientState
       const by = g.bats.y + Math.sin(a * 1.7) * 16 - i * 6;
       const rows = BAT_FRAMES[(Math.floor(t * 10) + i) % 2] ?? [];
       drawMatrix(ctx, rows, BAT_PALETTE, Math.round(bx), Math.round(by), 1, Math.cos(a) < 0);
-    }
-  }
-  // fireflies at night
-  if (night > 0.2) {
-    for (const f of st.fireflies) {
-      const x = f.x + Math.sin(t * f.speed + f.phase) * 18;
-      const y = f.y + Math.cos(t * f.speed * 0.7 + f.phase) * 10;
-      const blink = Math.sin(t * 2.2 + f.phase * 3);
-      if (blink < 0.3) continue;
-      ctx.fillStyle = `rgba(214,255,120,${((blink - 0.3) * night).toFixed(3)})`;
-      ctx.fillRect(Math.round(x), Math.round(y), 2, 2);
     }
   }
 }
