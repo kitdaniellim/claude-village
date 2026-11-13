@@ -158,10 +158,14 @@ const POP_OUT_DELAY_MS = 4500;
 
 /** Dispatcher decisions → server log (~/.rts-agents/desktop.log), deduped so a re-render doesn't spam. */
 let lastLeaderLog = '';
+/** Which page wrote a line: several apps (and test copies) can report to the same server. */
+const PAGE_TAG = Math.random().toString(36).slice(2, 6);
+let leaderLogTabs = 0;
 function leaderLog(msg: string): void {
   if (msg === lastLeaderLog) return;
   lastLeaderLog = msg;
-  void fetch(`${serverHttpUrl()}/api/leader-log`, { method: 'POST', body: msg }).catch(() => {});
+  const body = `[page ${PAGE_TAG} · ${leaderLogTabs} tabs] ${msg}`;
+  void fetch(`${serverHttpUrl()}/api/leader-log`, { method: 'POST', body }).catch(() => {});
 }
 
 /** Why queued reviews aren't moving: ok, no live Leader, can't type into its terminal, or it's busy. */
@@ -796,6 +800,7 @@ export default function TerminalPanel(props: TerminalPanelProps) {
     lastDispatch.current = { at: 0, ids: lastDispatch.current.ids }; // don't wait for the gap
   }, [reviewNowRequest]);
   useEffect(() => {
+    leaderLogTabs = tabsRef.current.length;
     const enabled = new Set(reviewIds);
     let leaderState: LeaderState = 'ok';
     const chosen = leaderOf(agents);
