@@ -114,8 +114,8 @@ curl -s -X POST localhost:4444/api/review -H 'content-type: application/json' \
                 {"label":"Push + deploy","state":"todo"}]}'
 ```
 
-**Always send `steps`** — the task as a checklist (3–8 steps, ≤ 40 chars each, 12 max). The village
-draws it as each project's progress bar (% = done ÷ total), so it must reflect the user's whole
+**Always send `steps`** — the task as a checklist (3–8 steps, ≤ 40 chars each, 12 max). It drives
+the progress bar in your §4 board (% = done ÷ total), so it must reflect the user's whole
 goal for this task, not just this turn:
 - `done` = verified landed · `you` = waiting on the user (needs-you items, secrets, their git) ·
   `todo` = the worker still has to do it.
