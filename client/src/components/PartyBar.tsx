@@ -56,6 +56,9 @@ interface PartyBarProps {
   onDismiss?: (sessionId: string) => void;
   /** Sessions marked Blocked (UI only), with their optional note. */
   blocked?: BlockedMap;
+  /** Sessions on standby (sessionId → when); clicking the badge clears it. */
+  standby?: Record<string, number>;
+  onClearStandby?: (sessionId: string) => void;
   /** Party Leader: opted-in sessions, its latest verdicts, who's queued / in review, and recruiting. */
   reviewIds?: string[];
   verdicts?: ReviewVerdict[];
@@ -88,7 +91,14 @@ function nestedIn(agents: AgentState[]): (a: AgentState) => boolean {
 }
 
 /** Status pill (dot + label, ✓ when done) — shared with the drawer's session card. `yourTurn` lights it up. */
-export function StatusPill({ status, yourTurn = false }: { status: AgentStatus; yourTurn?: boolean }) {
+export function StatusPill({ status, yourTurn = false, standby = false }: { status: AgentStatus; yourTurn?: boolean; standby?: boolean }) {
+  if (standby) {
+    return (
+      <span className="party-pill party-pill-standby" title="On standby — nothing for it right now">
+        ☾ Standby
+      </span>
+    );
+  }
   return (
     <span
       className={`party-pill party-pill-${status} ${yourTurn ? 'party-pill-yourturn' : ''}`}
@@ -124,6 +134,7 @@ interface CardModel {
 export default function PartyBar(props: PartyBarProps) {
   const { agents, skewMs, selectedSessionId, onSelect, filterRef, onCreateParty, sleepers = [], rally, onRally } = props;
   const { moveStatus = null, onMove, onCancelMove, onRestartApp = null, onDismiss, blocked = {} } = props;
+  const { standby = {}, onClearStandby } = props;
   const { reviewIds = [], verdicts = [], reviewQueue = [], onRecruitLeader, leaderState = 'ok', onReviewNow } = props;
   // Sessions the Leader manages that are waiting on the user — shown on the Leader's card.
   const needsYou = verdicts.filter((v) => v.verdict === 'needs-you' && reviewIds.includes(v.sessionId));
@@ -297,7 +308,9 @@ export default function PartyBar(props: PartyBarProps) {
     const squires = activeSquires(a);
     const offline = !a.alive && a.pid !== null;
     // Not the user's turn while a squire is still out — the main turn may resume on its own.
-    const yourTurn = a.alive && (a.status === 'done' || a.ccStatus === 'idle') && squires.length === 0;
+    const onStandby = standby[a.sessionId] !== undefined;
+    // Standby = "nothing for it right now": it stops reading as your turn.
+    const yourTurn = !onStandby && a.alive && (a.status === 'done' || a.ccStatus === 'idle') && squires.length === 0;
     const working = a.alive && !yourTurn && (a.status === 'running' || a.status === 'thinking' || a.status === 'delegating');
     const isTheLeader = a.sessionId === leaderId;
     const goParent = parent ? () => onSelect(parent.sessionId) : null;
@@ -320,6 +333,7 @@ export default function PartyBar(props: PartyBarProps) {
       selected ? 'party-card-selected' : '',
       yourTurn ? 'party-card-yourturn' : '',
       working ? 'party-card-working' : '',
+      onStandby && !working ? 'party-card-standby' : '',
       compact ? 'party-card-compact' : '',
       a.isSquire ? 'party-card-squire' : '',
       nested ? 'party-card-nested' : '',
@@ -342,6 +356,7 @@ export default function PartyBar(props: PartyBarProps) {
             {name}
           </span>
           {mark && <BlockedBadge mark={mark} mini />}
+          {onStandby && <StandbyBadge mini onClear={onClearStandby ? () => onClearStandby(a.sessionId) : undefined} />}
           {isTheLeader && needsYou.length > 0 && (
             <span className="party-badge party-badge-escalated party-badge-mini" title={`Escalated to you:\n${needsYouTip}`}>
               ⤴{needsYou.length}
@@ -350,7 +365,7 @@ export default function PartyBar(props: PartyBarProps) {
           {!isTheLeader && reviewIds.includes(a.sessionId) && (
             <ReviewBadge verdict={verdicts.find((v) => v.sessionId === a.sessionId) ?? null} queued={reviewQueue.includes(a.sessionId)} mini />
           )}
-          <StatusPill status={a.status} yourTurn={yourTurn} />
+          <StatusPill status={a.status} yourTurn={yourTurn} standby={onStandby && !working} />
           <span className="party-when">{relTime(a.lastEventAt, now + skewMs)}</span>
         </button>
       );
@@ -420,8 +435,9 @@ export default function PartyBar(props: PartyBarProps) {
                 ⚔ squire of {parentName}
               </span>
             )}
-            {(offline || a.status === 'delegating' || blocked[a.sessionId] || isTheLeader || reviewIds.includes(a.sessionId)) && (
+            {(offline || a.status === 'delegating' || blocked[a.sessionId] || onStandby || isTheLeader || reviewIds.includes(a.sessionId)) && (
               <span className="party-badges">
+                {onStandby && <StandbyBadge onClear={onClearStandby ? () => onClearStandby(a.sessionId) : undefined} />}
                 {isTheLeader && (
                   <span className="party-badge party-badge-leader" title="Party Leader — reviews opted-in parties when they finish a turn">
                     👑 Party Leader
@@ -469,7 +485,7 @@ export default function PartyBar(props: PartyBarProps) {
           </span>
         </span>
         <span className="party-foot">
-          <StatusPill status={a.status} yourTurn={yourTurn} />
+          <StatusPill status={a.status} yourTurn={yourTurn} standby={onStandby && !working} />
           {activity && <span className="party-activity">{activity}</span>}
           <span className="party-when">{relTime(a.lastEventAt, now + skewMs)}</span>
         </span>
@@ -713,6 +729,35 @@ function ReviewBadge({
   return (
     <span className={`party-badge party-badge-review ${tone}`} title={`${verdict.note || label}${hint}`} {...click}>
       {label}
+    </span>
+  );
+}
+
+/** Slate-blue STANDBY chip; clicking it clears the standby. */
+function StandbyBadge({ onClear, mini = false }: { onClear?: () => void; mini?: boolean }) {
+  const click = onClear
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        onClick: (e: { stopPropagation: () => void }) => {
+          e.stopPropagation();
+          onClear();
+        },
+        onKeyDown: (e: { key: string; preventDefault: () => void; stopPropagation: () => void }) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          e.stopPropagation();
+          onClear();
+        },
+      }
+    : {};
+  return (
+    <span
+      className={`party-badge party-badge-standby ${mini ? 'party-badge-mini' : ''}`}
+      title={`On standby — nothing for it right now. Clears when you continue it${onClear ? ' · click to clear now' : ''}.`}
+      {...click}
+    >
+      {mini ? '☾' : '☾ Standby'}
     </span>
   );
 }

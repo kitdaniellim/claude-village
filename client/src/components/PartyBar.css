@@ -867,3 +867,31 @@
   border-color: #f59e0b;
   cursor: help;
 }
+
+/* ── Standby: calm slate-blue (not amber your-turn, not red blocked) ───────── */
+
+.party-badge-standby {
+  color: #e0e7ff;
+  background: #3730a3;
+  border-color: #818cf8;
+}
+
+.party-badge-standby[role='button'] {
+  cursor: pointer;
+}
+
+.party-card-standby {
+  border-color: #312e81;
+  border-left: 4px solid #818cf8;
+  background: linear-gradient(90deg, rgba(129, 140, 248, 0.1), transparent 55%), var(--bg-4);
+}
+
+.party-pill-standby {
+  color: #e0e7ff !important;
+  background: #3730a3 !important;
+  border-color: #818cf8 !important;
+}
+
+.party-card-standby.party-card-selected {
+  border-color: var(--gold);
+}

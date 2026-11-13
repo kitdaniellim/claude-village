@@ -136,6 +136,9 @@ export interface TerminalPanelProps {
   /** Blocked labels (UI only), and setting/clearing one (null note = unblock). */
   blocked?: BlockedMap;
   onSetBlocked?: (sessionId: string, note: string | null) => void;
+  /** Standby labels (UI only): sessionId → when set; toggled from the drawer bar. */
+  standby?: Record<string, number>;
+  onToggleStandby?: (sessionId: string) => void;
   /** Party Leader: sessions opted in to review, the Leader's latest verdicts, and "recruit" clicks. */
   reviewIds?: string[];
   verdicts?: ReviewVerdict[];
@@ -264,7 +267,7 @@ function focusToast(r: FocusSessionResult): Omit<Toast, 'nonce'> {
 export default function TerminalPanel(props: TerminalPanelProps) {
   const { open, width, onWidthChange, onClose, bridge, agents, sessionRequest, placeRequest, focusMode, onToggleFocus } = props;
   const { synced, onHeroAdopted, onSleepers, onRestoreDrawer, rallyRequest, moveRequest, onMoveStatus } = props;
-  const { dismissRequest, onActiveChange, blocked = {}, onSetBlocked } = props;
+  const { dismissRequest, onActiveChange, blocked = {}, onSetBlocked, standby = {}, onToggleStandby } = props;
   const { reviewIds = EMPTY_IDS, verdicts = EMPTY_VERDICTS, leaderRequest = null, onToggleReview, onReviewQueue } = props;
   const { reviewNowRequest = null, onReviewNow, verdictsReady = false } = props;
   const cbs = useRef({ onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus, onActiveChange });
@@ -1279,6 +1282,21 @@ export default function TerminalPanel(props: TerminalPanelProps) {
               mark={blocked[active.sessionId] ?? null}
               onSave={(note) => onSetBlocked(active.sessionId as string, note)}
             />
+          )}
+          {active && active.kind === 'resume' && active.sessionId && onToggleStandby && (
+            <button
+              type="button"
+              className={`drawer-btn ${standby[active.sessionId] !== undefined ? 'drawer-btn-standby' : ''}`}
+              aria-pressed={standby[active.sessionId] !== undefined}
+              onClick={() => onToggleStandby(active.sessionId as string)}
+              title={
+                standby[active.sessionId] !== undefined
+                  ? 'On standby — click to clear (it also clears itself when you continue this session)'
+                  : 'Standby: nothing for it right now — not your turn, not blocked. Clears itself when you continue.'
+              }
+            >
+              ☾ {standby[active.sessionId] !== undefined ? 'On standby' : 'Standby'}
+            </button>
           )}
           {active && active.kind === 'resume' && active.sessionId && onToggleReview && !(activeAgent && isLeader(activeAgent)) && (
             <button

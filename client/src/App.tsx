@@ -38,6 +38,8 @@ import type { LayoutMap } from './components/MapEditor';
 /** A killed session may log one last line; don't let that bring it back. */
 const DISMISS_GRACE_MS = 15_000;
 const MAX_DISMISSED = 40;
+/** A standby set right after a turn shouldn't be cleared by that turn's last log lines. */
+const STANDBY_GRACE_MS = 5_000;
 
 function isStringList(v: unknown): v is string[] {
   return Array.isArray(v) && v.every((x) => typeof x === 'string');
@@ -136,6 +138,36 @@ export default function App() {
     },
     [setBlocked],
   );
+  // Standby (UI only): sessionId → when. "Nothing for it right now" — not your turn, not blocked.
+  // Cleared by hand, or automatically as soon as the session works again.
+  const [standby, setStandby] = usePersistentState<Record<string, number>>('party-standby', {}, isDismissedMap);
+  const handleToggleStandby = useCallback(
+    (sessionId: string) =>
+      setStandby((cur) => {
+        const next = { ...cur };
+        if (next[sessionId] !== undefined) delete next[sessionId];
+        else next[sessionId] = Date.now();
+        return Object.fromEntries(Object.entries(next).sort((a, b) => b[1] - a[1]).slice(0, MAX_DISMISSED));
+      }),
+    [setStandby],
+  );
+  useEffect(() => {
+    // You continued it: it's working again after being put on standby → drop the label.
+    const resumed = agents.filter((a) => {
+      const at = standby[a.sessionId];
+      return (
+        at !== undefined &&
+        a.lastEventAt > at + STANDBY_GRACE_MS &&
+        (a.status === 'running' || a.status === 'thinking' || a.ccStatus === 'busy')
+      );
+    });
+    if (resumed.length === 0) return;
+    setStandby((cur) => {
+      const next = { ...cur };
+      for (const a of resumed) delete next[a.sessionId];
+      return next;
+    });
+  }, [agents, standby, setStandby]);
   // Party Leader: which parties it reviews (saved), its verdicts, the review queue, recruit clicks.
   const [reviewIds, setReviewIds] = usePersistentState<string[]>('party-review', [], isStringList);
   const leaderAlive = !!leaderOf(agents)?.alive;
@@ -355,6 +387,8 @@ export default function App() {
             onRestartApp={desktop.bridge ? () => desktop.bridge?.restart() : null}
             onDismiss={handleDismiss}
             blocked={blocked}
+            standby={standby}
+            onClearStandby={handleToggleStandby}
             reviewIds={reviewIds}
             verdicts={verdicts}
             reviewQueue={reviewQueue}
@@ -434,6 +468,8 @@ export default function App() {
           dismissRequest={dismissRequest}
           blocked={blocked}
           onSetBlocked={handleSetBlocked}
+          standby={standby}
+          onToggleStandby={handleToggleStandby}
           reviewIds={reviewIds}
           verdicts={verdicts}
           verdictsReady={verdictsReady}

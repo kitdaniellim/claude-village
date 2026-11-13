@@ -1370,3 +1370,11 @@
   font-size: var(--fs-xs);
   padding: 6px 7px;
 }
+
+/* Standby: calm slate-blue — not amber "your turn", not red "blocked". */
+.drawer-btn-standby,
+.drawer-btn-standby:hover {
+  color: #e0e7ff;
+  background: #3730a3;
+  border-color: #818cf8;
+}
