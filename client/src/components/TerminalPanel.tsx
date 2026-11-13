@@ -36,7 +36,8 @@ import {
   restoreTabs,
   snapshotTabs,
 } from '../utils/terminalTabs';
-import type { PersistedTabs, SleepingHero, TerminalTab } from '../utils/terminalTabs';
+import type { BlockedMap, BlockedMark, PersistedTabs, SleepingHero, TerminalTab } from '../utils/terminalTabs';
+import { BLOCKED_NOTE_MAX } from '../utils/terminalTabs';
 import { DRAWER_DEFAULT_RATIO, clampDrawerWidth } from '../hooks/useDrawerWidth';
 import XtermView from './XtermView';
 import TerminalNotice, { MissingHistoryNotice } from './TerminalNotice';
@@ -129,6 +130,9 @@ export interface TerminalPanelProps {
   dismissRequest?: FocusRequest | null;
   /** The terminal on show changed (a session id, `tab:<id>` for a launch not yet adopted, or null). */
   onActiveChange?: (id: string | null) => void;
+  /** Blocked labels (UI only), and setting/clearing one (null note = unblock). */
+  blocked?: BlockedMap;
+  onSetBlocked?: (sessionId: string, note: string | null) => void;
 }
 
 /** Past the shell's 3 s close grace (desktop main.ts CLOSE_GRACE_MS) plus exit time. */
@@ -221,7 +225,7 @@ function focusToast(r: FocusSessionResult): Omit<Toast, 'nonce'> {
 export default function TerminalPanel(props: TerminalPanelProps) {
   const { open, width, onWidthChange, onClose, bridge, agents, sessionRequest, placeRequest, focusMode, onToggleFocus } = props;
   const { synced, onHeroAdopted, onSleepers, onRestoreDrawer, rallyRequest, moveRequest, onMoveStatus } = props;
-  const { dismissRequest, onActiveChange } = props;
+  const { dismissRequest, onActiveChange, blocked = {}, onSetBlocked } = props;
   const cbs = useRef({ onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus, onActiveChange });
   cbs.current = { onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus, onActiveChange };
 
@@ -1089,7 +1093,14 @@ export default function TerminalPanel(props: TerminalPanelProps) {
           ) : null}
         </span>
         <span className="drawer-actions">
-          {/* Focus · Fetch Squire · Pop out, left to right — Pop out sits top-right, next to hide. */}
+          {/* Blocked · Focus · Fetch Squire · Pop out, left to right — Pop out sits top-right, next to hide. */}
+          {active && active.kind === 'resume' && active.sessionId && onSetBlocked && (
+            <BlockedControl
+              key={active.sessionId}
+              mark={blocked[active.sessionId] ?? null}
+              onSave={(note) => onSetBlocked(active.sessionId as string, note)}
+            />
+          )}
           {active && (
             <button
               type="button"
@@ -1269,6 +1280,99 @@ function SleepingPane({ tab, name, synced, onWake }: SleepingPaneProps) {
         {!synced && <div className="drawer-sleeping-cwd">Waiting for the village roster…</div>}
       </div>
     </div>
+  );
+}
+
+// ── Blocked label (UI only) ─────────────────────────────────────────────────
+
+/**
+ * "⛔ Blocked" toggle for the shown session: a small popover takes an optional note (shown on hover
+ * here and on the party card). Purely a reminder — the terminal is never touched.
+ */
+function BlockedControl({ mark, onSave }: { mark: BlockedMark | null; onSave: (note: string | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(mark?.note ?? '');
+  const wrapRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent): void => {
+      if (e.target instanceof Node && wrapRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const toggle = (): void => {
+    setDraft(mark?.note ?? '');
+    setOpen((v) => !v);
+  };
+  const save = (): void => {
+    onSave(draft);
+    setOpen(false);
+  };
+
+  return (
+    <span className="drawer-blocked" ref={wrapRef}>
+      <button
+        type="button"
+        className={`drawer-btn ${mark ? 'drawer-btn-blocked' : ''}`}
+        aria-pressed={!!mark}
+        aria-expanded={open}
+        onClick={toggle}
+        title={mark ? (mark.note ? `Blocked: ${mark.note}` : 'Blocked — no note') : 'Mark this session blocked (a reminder only)'}
+      >
+        ⛔ {mark ? 'Blocked' : 'Block'}
+      </button>
+      {open && (
+        <div className="drawer-blocked-pop" role="dialog" aria-label={mark ? 'Edit blocked note' : 'Mark blocked'}>
+          <label className="drawer-blocked-label" htmlFor="blocked-note">
+            What's it waiting on? <span className="drawer-btn-muted">(optional)</span>
+          </label>
+          <textarea
+            id="blocked-note"
+            className="drawer-blocked-note"
+            value={draft}
+            maxLength={BLOCKED_NOTE_MAX}
+            rows={3}
+            autoFocus
+            placeholder="e.g. waiting on Josh's reply about KGH SKUs"
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                save();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                setOpen(false);
+              }
+            }}
+          />
+          <div className="drawer-blocked-row">
+            {mark && (
+              <button
+                type="button"
+                className="drawer-btn drawer-btn-ghost"
+                onClick={() => {
+                  onSave(null);
+                  setOpen(false);
+                }}
+              >
+                Unblock
+              </button>
+            )}
+            <span className="drawer-blocked-spacer" />
+            <button type="button" className="drawer-btn drawer-btn-ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+            <button type="button" className="drawer-btn drawer-btn-primary" onClick={save}>
+              {mark ? 'Save' : 'Mark blocked'}
+            </button>
+          </div>
+        </div>
+      )}
+    </span>
   );
 }
 

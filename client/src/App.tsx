@@ -21,7 +21,8 @@ import TerminalPanel from './components/TerminalPanel';
 import PanelBoundary from './components/PanelBoundary';
 import type { MoveRequest, MoveStatus, PlaceRequest, RallyRequest } from './components/TerminalPanel';
 import type { RallySession } from './types/agent';
-import type { SleepingHero } from './utils/terminalTabs';
+import type { BlockedMap, SleepingHero } from './utils/terminalTabs';
+import { BLOCKED_MAX, BLOCKED_NOTE_MAX, isBlockedMap } from './utils/terminalTabs';
 import RewardsPanel from './components/RewardsPanel';
 import AwardToasts from './components/AwardToasts';
 import MapEditor, {
@@ -115,6 +116,20 @@ export default function App() {
     setDismissRequest((prev) => ({ sessionId, nonce: (prev?.nonce ?? 0) + 1 }));
     setSelectedSessionId((cur) => (cur === sessionId ? null : cur));
   }, [setDismissed]);
+  // Blocked labels (UI only): sessionId → optional note. Shown on party cards and the drawer.
+  const [blocked, setBlocked] = usePersistentState<BlockedMap>('party-blocked', {}, isBlockedMap);
+  const handleSetBlocked = useCallback(
+    (sessionId: string, note: string | null) => {
+      setBlocked((cur) => {
+        const next = { ...cur };
+        if (note === null) delete next[sessionId];
+        else next[sessionId] = { note: note.trim().slice(0, BLOCKED_NOTE_MAX), at: Date.now() };
+        // Keep the newest few (prefs values are size-capped).
+        return Object.fromEntries(Object.entries(next).sort((a, b) => b[1].at - a[1].at).slice(0, BLOCKED_MAX));
+      });
+    },
+    [setBlocked],
+  );
   // The drawer switched terminals on its own (Create Party, Rally, Move): highlight that hero.
   const handleActiveChange = useCallback((id: string | null) => {
     if (id) setSelectedSessionId(id);
@@ -301,6 +316,7 @@ export default function App() {
             onCancelMove={handleCancelMove}
             onRestartApp={desktop.bridge ? () => desktop.bridge?.restart() : null}
             onDismiss={handleDismiss}
+            blocked={blocked}
           />
         </PanelBoundary>
         {focusActive && toasts}
@@ -372,6 +388,8 @@ export default function App() {
           moveRequest={moveRequest}
           onMoveStatus={setMoveStatus}
           dismissRequest={dismissRequest}
+          blocked={blocked}
+          onSetBlocked={handleSetBlocked}
           onActiveChange={handleActiveChange}
         />
       </main>

@@ -222,3 +222,26 @@ export function isMissingConversation(text: string, sessionId: string): boolean 
   const m = /No conversation found with session ID:?\s*([\w-]+)/i.exec(flat);
   return !!m && m[1] === sessionId;
 }
+
+/** Blocked label on a session (UI only — the terminal is untouched). */
+export interface BlockedMark {
+  note: string;
+  at: number;
+}
+
+/** sessionId → blocked mark. */
+export type BlockedMap = Record<string, BlockedMark>;
+
+/** Notes are short reminders; caps keep the saved map inside the prefs backup's size limit. */
+export const BLOCKED_NOTE_MAX = 240;
+export const BLOCKED_MAX = 12;
+
+export function isBlockedMap(v: unknown): v is BlockedMap {
+  return (
+    !!v &&
+    typeof v === 'object' &&
+    Object.values(v as object).every(
+      (m) => !!m && typeof m === 'object' && typeof (m as BlockedMark).note === 'string' && typeof (m as BlockedMark).at === 'number',
+    )
+  );
+}

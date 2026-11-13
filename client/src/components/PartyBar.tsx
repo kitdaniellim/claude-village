@@ -13,7 +13,7 @@ import type { Rally } from '../hooks/useRally';
 import RallyCard from './RallyCard';
 import MoveCard from './MoveCard';
 import type { MoveStatus } from './TerminalPanel';
-import type { SleepingHero } from '../utils/terminalTabs';
+import type { BlockedMap, BlockedMark, SleepingHero } from '../utils/terminalTabs';
 import { STATUS_COLORS, STATUS_LABELS, heroColor } from '../utils/spriteMapper';
 import { flavorLine } from '../utils/flavor';
 import {
@@ -52,6 +52,8 @@ interface PartyBarProps {
   onRestartApp?: (() => void) | null;
   /** ✕ confirmed on a card: end that session and drop it from the party. */
   onDismiss?: (sessionId: string) => void;
+  /** Sessions marked Blocked (UI only), with their optional note. */
+  blocked?: BlockedMap;
 }
 
 /** Saved party order (session ids, `tab:<id>` for launches); prefs values are size-capped. */
@@ -108,7 +110,7 @@ interface CardModel {
 
 export default function PartyBar(props: PartyBarProps) {
   const { agents, skewMs, selectedSessionId, onSelect, filterRef, onCreateParty, sleepers = [], rally, onRally } = props;
-  const { moveStatus = null, onMove, onCancelMove, onRestartApp = null, onDismiss } = props;
+  const { moveStatus = null, onMove, onCancelMove, onRestartApp = null, onDismiss, blocked = {} } = props;
   const [now, setNow] = useState(() => Date.now());
   const [filter, setFilter] = useState('');
   const [order, setOrder] = usePersistentState<string[]>('party-order', [], isStringArray);
@@ -265,8 +267,10 @@ export default function PartyBar(props: PartyBarProps) {
     const goParent = parent ? () => onSelect(parent.sessionId) : null;
     const shownBranch = featureBranch(branch);
     // The session id, place and raw tool detail live here only — the card shows the friendly bits.
+    const mark = blocked[a.sessionId];
     const tooltip = [
       heroTitle(a),
+      mark ? `⛔ Blocked${mark.note ? `: ${mark.note}` : ''}` : null,
       subtitle ? `“${subtitle}”` : null,
       agentPlaceLabel(a),
       `${a.shortId}${branch ? ` · ⎇ ${branch}` : ''}`,
@@ -347,8 +351,9 @@ export default function PartyBar(props: PartyBarProps) {
                 ⚔ squire of {parentName}
               </span>
             )}
-            {(offline || a.status === 'delegating') && (
+            {(offline || a.status === 'delegating' || blocked[a.sessionId]) && (
               <span className="party-badges">
+                {blocked[a.sessionId] && <BlockedBadge mark={blocked[a.sessionId] as BlockedMark} />}
                 {offline && (
                   <span className="party-badge party-badge-offline" title="The Claude Code process has exited">
                     Offline
@@ -471,7 +476,12 @@ export default function PartyBar(props: PartyBarProps) {
               {slot.card
                 ? renderCard(slot.card)
                 : slot.sleeper && (
-                    <SleeperCard hero={slot.sleeper} selected={slot.id === selectedSessionId} onSelect={onSelect} />
+                    <SleeperCard
+                      hero={slot.sleeper}
+                      selected={slot.id === selectedSessionId}
+                      onSelect={onSelect}
+                      mark={blocked[slot.sleeper.sessionId] ?? null}
+                    />
                   )}
               {dismissControls(slot.id, name)}
               {slot.children.map((kid) => (
@@ -489,7 +499,26 @@ export default function PartyBar(props: PartyBarProps) {
 }
 
 /** Placeholder for a hero whose terminal came back after a restart (or a launch not yet adopted). */
-function SleeperCard({ hero: s, selected, onSelect }: { hero: SleepingHero; selected: boolean; onSelect: (id: string) => void }) {
+/** Red BLOCKED chip; hovering shows the note (the label is a reminder — nothing else changes). */
+function BlockedBadge({ mark }: { mark: BlockedMark }) {
+  return (
+    <span className="party-badge party-badge-blocked" title={mark.note ? `Blocked: ${mark.note}` : 'Blocked — no note'}>
+      ⛔ Blocked
+    </span>
+  );
+}
+
+function SleeperCard({
+  hero: s,
+  selected,
+  onSelect,
+  mark,
+}: {
+  hero: SleepingHero;
+  selected: boolean;
+  onSelect: (id: string) => void;
+  mark: BlockedMark | null;
+}) {
   const color = heroColor(s.sessionId);
   const line = s.launching
     ? s.asleep
@@ -513,6 +542,11 @@ function SleeperCard({ hero: s, selected, onSelect }: { hero: SleepingHero; sele
           <span className="party-hero">
             <span className="party-name">{s.name}</span>
           </span>
+          {mark && (
+            <span className="party-badges">
+              <BlockedBadge mark={mark} />
+            </span>
+          )}
           <span className="party-flavor">{line}</span>
         </span>
       </span>

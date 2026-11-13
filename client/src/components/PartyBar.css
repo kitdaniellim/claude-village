@@ -621,3 +621,11 @@
     animation: none;
   }
 }
+
+/* Blocked (a reminder label the user sets) — red, distinct from Offline grey and Your-turn gold. */
+.party-badge-blocked {
+  color: #fee2e2;
+  background: #7f1d1d;
+  border-color: #f87171;
+  cursor: help;
+}
