@@ -235,7 +235,9 @@ const server = Bun.serve({
         .json()
         .catch(() => null)
         .then((body) => {
-          const saved = reviews.record(body);
+          const sid = body && typeof body === 'object' ? (body as Record<string, unknown>)['sessionId'] : null;
+          const turnDoneAt = typeof sid === 'string' ? (store.getAgent(sid)?.lastTurnDoneAt ?? null) : null;
+          const saved = reviews.record(body, turnDoneAt);
           return new Response(JSON.stringify(saved ? { ok: true, verdict: saved } : { ok: false, error: 'bad verdict' }), {
             status: saved ? 200 : 400,
             headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },

@@ -261,6 +261,7 @@ export class AgentStore {
       this.linkSquires();
     }
     if (u.model) agent.model = u.model;
+    if (u.humanPrompt) agent.lastHumanPromptAt = u.ts;
     // A turn that ends while squires are still out isn't finished yet.
     if (u.status !== undefined) agent.status = u.status === 'done' && this.hasActiveSquire(agent) ? 'delegating' : u.status;
     if (u.tool !== undefined) agent.tool = u.tool;

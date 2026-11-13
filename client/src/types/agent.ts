@@ -39,6 +39,8 @@ export interface AgentState {
   lastEventAt: number;
   /** When the session last finished a turn (turn_done), or null — the Party Leader reviews these. */
   lastTurnDoneAt?: number | null;
+  /** When the human last typed a prompt into this session — supersedes an older needs-you verdict. */
+  lastHumanPromptAt?: number | null;
   startedAt: number;
   eventCount: number;
 }
@@ -200,6 +202,9 @@ export interface ReviewVerdict {
   /** needs-you: the exact replies the worker asked for ("apply it"), offered as one-click buttons. */
   replies?: string[];
   at: number;
+  /** The worker's lastTurnDoneAt when the verdict landed — the turn it judged. A human prompt after
+   *  this settles a needs-you verdict. */
+  turnDoneAt?: number;
 }
 
 export interface ReviewsResponse {

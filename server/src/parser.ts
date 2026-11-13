@@ -39,6 +39,8 @@ export interface SessionUpdate {
   promptTitle?: string;
   /** Title candidate from a `last-prompt` line (lowest precedence). */
   lastPromptTitle?: string;
+  /** True when this line is a prompt the human typed (not a peer session message or task notification). */
+  humanPrompt?: boolean;
   /** Feed events produced by this line (often empty or a single entry). */
   events: ParsedEvent[];
 }
@@ -442,6 +444,10 @@ export class SessionParser {
 
     // Real user prompt → model starts composing.
     update.status = 'thinking';
+    // `origin.kind` separates the human from peer sessions (SendMessage) and task notifications;
+    // older logs carry no origin — those prompts were typed by the human.
+    const originKind = asString(asRecord(o['origin'])?.['kind']);
+    if (originKind === null || originKind === 'human') update.humanPrompt = true;
 
     if (o['isCompactSummary'] === true) return; // continuation blob — not a title
     const text = typeof content === 'string' ? content : firstTextBlock(blocks);

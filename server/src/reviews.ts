@@ -55,6 +55,7 @@ export class Reviews {
     const note = typeof o['note'] === 'string' ? o['note'].replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 400) : '';
     const round = Number.isInteger(o['round']) && (o['round'] as number) >= 0 ? (o['round'] as number) : 0;
     const at = typeof o['at'] === 'number' ? o['at'] : Date.now();
+    const turnDoneAt = typeof o['turnDoneAt'] === 'number' ? o['turnDoneAt'] : undefined;
     const replies = Array.isArray(o['replies'])
       ? (o['replies'] as unknown[])
           .filter((r): r is string => typeof r === 'string')
@@ -62,13 +63,15 @@ export class Reviews {
           .filter(Boolean)
           .slice(0, 4)
       : [];
-    return { sessionId, verdict: verdict as ReviewVerdict['verdict'], note, round, ...(replies.length ? { replies } : {}), at };
+    return { sessionId, verdict: verdict as ReviewVerdict['verdict'], note, round, ...(replies.length ? { replies } : {}), at, ...(turnDoneAt !== undefined ? { turnDoneAt } : {}) };
   }
 
-  record(raw: unknown): ReviewVerdict | null {
+  /** `turnDoneAt` comes from the server's own agent state, never from the request body. */
+  record(raw: unknown, turnDoneAt: number | null = null): ReviewVerdict | null {
     const v = Reviews.parse(raw);
     if (!v) return null;
-    const stamped = { ...v, at: Date.now() };
+    const { turnDoneAt: _ignored, ...rest } = v;
+    const stamped: ReviewVerdict = { ...rest, at: Date.now(), ...(turnDoneAt !== null ? { turnDoneAt } : {}) };
     this.byId.delete(v.sessionId); // re-insert so Map order = recency
     this.byId.set(v.sessionId, stamped);
     // Keep memory at the same cap as the file: drop the oldest.

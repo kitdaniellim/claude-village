@@ -135,7 +135,14 @@ export default function PartyBar(props: PartyBarProps) {
   const { agents, skewMs, selectedSessionId, onSelect, filterRef, onCreateParty, sleepers = [], rally, onRally } = props;
   const { moveStatus = null, onMove, onCancelMove, onRestartApp = null, onDismiss, blocked = {} } = props;
   const { standby = {}, onClearStandby } = props;
-  const { reviewIds = [], verdicts = [], reviewQueue = [], onRecruitLeader, leaderState = 'ok', onReviewNow } = props;
+  const { reviewIds = [], verdicts: allVerdicts = [], reviewQueue = [], onRecruitLeader, leaderState = 'ok', onReviewNow } = props;
+  // A needs-you verdict is settled once the user prompts that session themselves after the turn
+  // it judged (the Leader may record it a few minutes later, so compare to the turn, not `at`).
+  const verdicts = allVerdicts.filter((v) => {
+    if (v.verdict !== 'needs-you') return true;
+    const promptedAt = agents.find((a) => a.sessionId === v.sessionId)?.lastHumanPromptAt ?? 0;
+    return promptedAt <= (v.turnDoneAt ?? v.at);
+  });
   // Sessions the Leader manages that are waiting on the user — shown on the Leader's card.
   const needsYou = verdicts.filter((v) => v.verdict === 'needs-you' && reviewIds.includes(v.sessionId));
   const needsYouTip = needsYou
