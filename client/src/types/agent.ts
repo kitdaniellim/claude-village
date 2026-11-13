@@ -37,6 +37,8 @@ export interface AgentState {
   detail: string | null;
   model: string | null;
   lastEventAt: number;
+  /** When the session last finished a turn (turn_done), or null — the Party Leader reviews these. */
+  lastTurnDoneAt?: number | null;
   startedAt: number;
   eventCount: number;
 }

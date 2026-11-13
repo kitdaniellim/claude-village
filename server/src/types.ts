@@ -65,6 +65,8 @@ export interface AgentState {
   model: string | null;
   /** Epoch ms of the last log event observed for this session. */
   lastEventAt: number;
+  /** When the session last finished a turn (turn_done), or null — the Party Leader reviews these. */
+  lastTurnDoneAt?: number | null;
   /** Epoch ms of the earliest log event observed for this session (within the startup tail for old files). */
   startedAt: number;
   /** Total parsed events attributed to this session since the server started. */

@@ -346,6 +346,10 @@ export class AgentStore {
     tool: string | null,
     detail: string | null
   ): void {
+    if (kind === 'turn_done') {
+      const a = this.agents.get(sessionId);
+      if (a) a.lastTurnDoneAt = ts;
+    }
     const event: ActivityEvent = {
       id: `e${++this.eventSeq}`,
       sessionId,

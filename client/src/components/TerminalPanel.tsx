@@ -154,6 +154,10 @@ const EMPTY_IDS: string[] = [];
 const EMPTY_VERDICTS: ReviewVerdict[] = [];
 /** Don't type a new review into the Leader until it has had time to pick up the last one. */
 const LEADER_DISPATCH_GAP_MS = 8_000;
+/** Log lines a turn's end can trail by (the closing text) before it counts as new activity. */
+const TURN_SETTLE_MS = 20_000;
+/** How far back a missed finished turn is still worth reviewing. */
+const CATCH_UP_MS = 6 * 60 * 60_000;
 
 /** Past the shell's 3 s close grace (desktop main.ts CLOSE_GRACE_MS) plus exit time. */
 const POP_OUT_DELAY_MS = 4500;
@@ -807,12 +811,17 @@ export default function TerminalPanel(props: TerminalPanelProps) {
     let leaderState: LeaderState = 'ok';
     const chosen = leaderOf(agents);
     const leader = chosen && chosen.alive ? chosen : null;
+    const now0 = Date.now();
     // 1. queue finished turns (once verdicts are known, so a reload doesn't re-send judged turns)
     for (const a of verdictsReady ? agents : []) {
       if (!enabled.has(a.sessionId) || a.sessionId === chosen?.sessionId || a.isSquire || !a.alive) continue;
-      // Only a turn that really finished (the server saw turn_done → 'done'). "Idle" alone also covers a
-      // session that was just resumed or interrupted — nothing to review there.
-      const finished = a.status === 'done';
+      // A finished turn: the server saw turn_done and nothing was logged after it (a resumed or
+      // interrupted session has activity after its last turn_done). Catches turns missed during a
+      // reload or after the done→idle switch, not just the live 'done' moment.
+      const doneAt = a.lastTurnDoneAt ?? null;
+      const finished =
+        a.status === 'done' ||
+        (doneAt !== null && a.lastEventAt - doneAt <= TURN_SETTLE_MS && now0 - doneAt <= CATCH_UP_MS && a.status === 'idle');
       if (!finished || (reviewedAt.current.get(a.sessionId) ?? 0) >= a.lastEventAt) continue;
       // Already judged this turn (a verdict newer than its last activity) — e.g. after a page reload.
       if (verdicts.some((v) => v.sessionId === a.sessionId && v.at >= a.lastEventAt)) {
@@ -850,24 +859,25 @@ export default function TerminalPanel(props: TerminalPanelProps) {
         // Everything waiting goes in one request: several finished sessions → one Leader turn
         // (it fans them out to sub-agents and answers with one summary).
         const items: { name: string; session: string; cwd: string; round: number }[] = [];
+        const keep: string[] = [];
         for (const id of reviewQueue.current) {
           const worker = agents.find((a) => a.sessionId === id);
-          // Still finished = nothing new since it was queued (same last activity, not busy). The
-          // server turning 'done' into 'idle' after 5 min doesn't count; a new prompt does.
           const queuedAt = reviewedAt.current.get(id) ?? 0;
-          const stillDone =
-            !!worker &&
-            worker.alive &&
-            worker.ccStatus !== 'busy' &&
-            worker.status !== 'running' &&
-            worker.status !== 'thinking' &&
-            worker.status !== 'delegating' &&
-            (worker.lastEventAt <= queuedAt || forced.current.has(id));
-          forced.current.delete(id);
-          if (!worker || !stillDone) {
-            leaderLog(`dropped ${worker ? agentName(worker) : id}: started something new since it was queued`);
+          const isForced = forced.current.has(id);
+          // Dropped only for real new activity: it logged something after being queued (you prompted
+          // it again — that turn gets its own review). The server's done→idle switch doesn't count.
+          if (!worker || !worker.alive || (!isForced && worker.lastEventAt > queuedAt)) {
+            leaderLog(`dropped ${worker ? agentName(worker) : id}: ${worker?.alive ? 'new activity since it was queued' : 'session ended'}`);
+            forced.current.delete(id);
             continue;
           }
+          // A turn's end reaches the log a moment before Claude's own status flips busy → idle:
+          // that's not new work — keep it queued and send it on a later pass.
+          if (worker.ccStatus === 'busy' || worker.status === 'running' || worker.status === 'thinking' || worker.status === 'delegating') {
+            keep.push(id);
+            continue;
+          }
+          forced.current.delete(id);
           const last = verdicts.find((v) => v.sessionId === id);
           items.push({
             name: agentName(worker),
@@ -876,7 +886,8 @@ export default function TerminalPanel(props: TerminalPanelProps) {
             round: last && last.verdict === 'changes' ? last.round + 1 : 1,
           });
         }
-        reviewQueue.current = [];
+        reviewQueue.current = keep;
+        if (keep.length > 0) leaderLog(`holding ${keep.length}: its Claude still reports busy`);
         if (items.length > 0) {
           lastDispatch.current = { at: now, ids: items.map((x) => x.session) };
           const payload = JSON.stringify(items.length === 1 ? items[0] : items);
