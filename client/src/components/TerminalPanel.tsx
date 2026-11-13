@@ -139,6 +139,8 @@ export interface TerminalPanelProps {
   /** Party Leader: sessions opted in to review, the Leader's latest verdicts, and "recruit" clicks. */
   reviewIds?: string[];
   verdicts?: ReviewVerdict[];
+  /** Verdicts loaded at least once — queueing waits for it so a reload never re-sends a judged turn. */
+  verdictsReady?: boolean;
   leaderRequest?: { nonce: number } | null;
   onToggleReview?: (sessionId: string) => void;
   /** Sessions waiting for (or in) a Leader review right now, and why the Leader isn't taking them. */
@@ -260,7 +262,7 @@ export default function TerminalPanel(props: TerminalPanelProps) {
   const { synced, onHeroAdopted, onSleepers, onRestoreDrawer, rallyRequest, moveRequest, onMoveStatus } = props;
   const { dismissRequest, onActiveChange, blocked = {}, onSetBlocked } = props;
   const { reviewIds = EMPTY_IDS, verdicts = EMPTY_VERDICTS, leaderRequest = null, onToggleReview, onReviewQueue } = props;
-  const { reviewNowRequest = null, onReviewNow } = props;
+  const { reviewNowRequest = null, onReviewNow, verdictsReady = false } = props;
   const cbs = useRef({ onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus, onActiveChange });
   cbs.current = { onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus, onActiveChange };
 
@@ -805,13 +807,18 @@ export default function TerminalPanel(props: TerminalPanelProps) {
     let leaderState: LeaderState = 'ok';
     const chosen = leaderOf(agents);
     const leader = chosen && chosen.alive ? chosen : null;
-    // 1. queue finished turns
-    for (const a of agents) {
+    // 1. queue finished turns (once verdicts are known, so a reload doesn't re-send judged turns)
+    for (const a of verdictsReady ? agents : []) {
       if (!enabled.has(a.sessionId) || a.sessionId === chosen?.sessionId || a.isSquire || !a.alive) continue;
       // Only a turn that really finished (the server saw turn_done → 'done'). "Idle" alone also covers a
       // session that was just resumed or interrupted — nothing to review there.
       const finished = a.status === 'done';
       if (!finished || (reviewedAt.current.get(a.sessionId) ?? 0) >= a.lastEventAt) continue;
+      // Already judged this turn (a verdict newer than its last activity) — e.g. after a page reload.
+      if (verdicts.some((v) => v.sessionId === a.sessionId && v.at >= a.lastEventAt)) {
+        reviewedAt.current.set(a.sessionId, a.lastEventAt);
+        continue;
+      }
       reviewedAt.current.set(a.sessionId, a.lastEventAt);
       if (!reviewQueue.current.includes(a.sessionId)) reviewQueue.current.push(a.sessionId);
       leaderLog(`queued ${agentName(a)} (${a.sessionId.slice(0, 8)}) — turn finished`);
@@ -893,7 +900,7 @@ export default function TerminalPanel(props: TerminalPanelProps) {
       queueKey.current = key;
       onReviewQueue?.(ids, ids.length > 0 ? leaderState : 'ok');
     }
-  }, [agents, reviewIds, verdicts, ownTabForPid, showToast, onReviewQueue, wakeTab, tabs, reviewNowRequest]);
+  }, [agents, reviewIds, verdicts, verdictsReady, ownTabForPid, showToast, onReviewQueue, wakeTab, tabs, reviewNowRequest]);
 
   const handledMoveRef = useRef<MoveRequest | null>(null);
   useEffect(() => {

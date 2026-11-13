@@ -139,7 +139,7 @@ export default function App() {
   // Party Leader: which parties it reviews (saved), its verdicts, the review queue, recruit clicks.
   const [reviewIds, setReviewIds] = usePersistentState<string[]>('party-review', [], isStringList);
   const leaderAlive = !!leaderOf(agents)?.alive;
-  const verdicts = useReviews(reviewIds.length > 0 || leaderAlive);
+  const { verdicts, ready: verdictsReady } = useReviews(reviewIds.length > 0 || leaderAlive);
   const [reviewQueue, setReviewQueue] = useState<string[]>([]);
   const [leaderState, setLeaderState] = useState<LeaderState>('ok');
   const [reviewNowRequest, setReviewNowRequest] = useState<FocusRequest | null>(null);
@@ -436,6 +436,7 @@ export default function App() {
           onSetBlocked={handleSetBlocked}
           reviewIds={reviewIds}
           verdicts={verdicts}
+          verdictsReady={verdictsReady}
           leaderRequest={leaderRequest}
           onToggleReview={handleToggleReview}
           onReviewQueue={handleReviewQueue}

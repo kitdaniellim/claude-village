@@ -859,3 +859,11 @@
 .party-badge-review[role='button'] {
   cursor: pointer;
 }
+
+/* The Leader handed something back to the user (amber: attention, not an error). */
+.party-badge-escalated {
+  color: #1c1003;
+  background: #fbbf24;
+  border-color: #f59e0b;
+  cursor: help;
+}

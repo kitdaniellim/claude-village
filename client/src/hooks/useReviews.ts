@@ -6,8 +6,10 @@ import { serverHttpUrl } from './useAgentSocket';
 
 const POLL_MS = 4_000;
 
-export function useReviews(active: boolean): ReviewVerdict[] {
+/** `ready` turns true after the first successful load — until then "no verdict" means "not known yet". */
+export function useReviews(active: boolean): { verdicts: ReviewVerdict[]; ready: boolean } {
   const [verdicts, setVerdicts] = useState<ReviewVerdict[]>([]);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!active) return;
     let live = true;
@@ -16,6 +18,7 @@ export function useReviews(active: boolean): ReviewVerdict[] {
         .then((r) => (r.ok ? (r.json() as Promise<ReviewsResponse>) : null))
         .then((res) => {
           if (!live || !res || !Array.isArray(res.verdicts)) return;
+          setReady(true);
           setVerdicts((cur) => (JSON.stringify(cur) === JSON.stringify(res.verdicts) ? cur : res.verdicts));
         })
         .catch(() => {
@@ -29,5 +32,5 @@ export function useReviews(active: boolean): ReviewVerdict[] {
       window.clearInterval(id);
     };
   }, [active]);
-  return verdicts;
+  return { verdicts, ready };
 }

@@ -343,8 +343,8 @@ export default function PartyBar(props: PartyBarProps) {
           </span>
           {mark && <BlockedBadge mark={mark} mini />}
           {isTheLeader && needsYou.length > 0 && (
-            <span className="party-badge party-badge-review-needs-you party-badge-mini" title={needsYouTip}>
-              ⚠{needsYou.length}
+            <span className="party-badge party-badge-escalated party-badge-mini" title={`Escalated to you:\n${needsYouTip}`}>
+              ⤴{needsYou.length}
             </span>
           )}
           {!isTheLeader && reviewIds.includes(a.sessionId) && (
@@ -428,8 +428,8 @@ export default function PartyBar(props: PartyBarProps) {
                   </span>
                 )}
                 {isTheLeader && needsYou.length > 0 && (
-                  <span className="party-badge party-badge-review-needs-you" title={needsYouTip}>
-                    ⚠ Needs you{needsYou.length > 1 ? ` · ${needsYou.length}` : ''}
+                  <span className="party-badge party-badge-escalated" title={`Escalated to you — the Leader couldn't settle these:\n${needsYouTip}`}>
+                    ⤴ Escalated{needsYou.length > 1 ? ` · ${needsYou.length}` : ''}
                   </span>
                 )}
                 {isTheLeader && queueNote && (
@@ -683,8 +683,8 @@ function ReviewBadge({
     : {};
   const hint = onReviewNow ? ' · click: review now' : '';
   if (mini) {
-    const icon = queued ? '👑…' : !verdict ? '👑' : verdict.verdict === 'approved' ? '👑✓' : verdict.verdict === 'changes' ? `👑${verdict.round}` : '👑';
-    const tone = queued || !verdict || verdict.verdict === 'needs-you' ? '' : `party-badge-review-${verdict.verdict}`;
+    const icon = queued ? '👑…' : !verdict ? '👑' : verdict.verdict === 'approved' ? '👑✓' : verdict.verdict === 'changes' ? `👑${verdict.round}` : '👑!';
+    const tone = queued || !verdict ? '' : `party-badge-review-${verdict.verdict}`;
     const tip = queued ? 'Waiting for the Party Leader' : verdict ? verdict.note || verdict.verdict : 'Reviewed by the Party Leader';
     return (
       <span className={`party-badge party-badge-review party-badge-mini ${tone}`} title={tip}>
@@ -706,10 +706,10 @@ function ReviewBadge({
       </span>
     );
   }
-  // "Needs you" is shown on the Leader's card (it manages this session); here it stays "Delegated".
+  // One badge per delegated session: the crown says "delegated", the label says where it stands.
   const label =
-    verdict.verdict === 'approved' ? '👑 ✓ Approved' : verdict.verdict === 'changes' ? `👑 Fixing · round ${verdict.round}` : '👑 Delegated';
-  const tone = verdict.verdict === 'needs-you' ? '' : `party-badge-review-${verdict.verdict}`;
+    verdict.verdict === 'approved' ? '👑 ✓ Approved' : verdict.verdict === 'changes' ? `👑 Fixing · round ${verdict.round}` : '👑 Needs you';
+  const tone = `party-badge-review-${verdict.verdict}`;
   return (
     <span className={`party-badge party-badge-review ${tone}`} title={`${verdict.note || label}${hint}`} {...click}>
       {label}

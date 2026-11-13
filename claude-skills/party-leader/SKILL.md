@@ -92,19 +92,27 @@ curl -s -X POST localhost:4444/api/review -H 'content-type: application/json' \
 
 ## 4. Output — a summary every time
 
-End every review call with a short summary, one line per session reviewed, nothing else. Never
-restate or quote the user's request or the worker's message, never narrate what you checked:
+End every review call with a short, scannable summary and nothing else. One status line per
+session (≤ ~60 chars), then at most two short bullet groups. Never restate the user's request or
+the worker's message, never narrate what you checked:
 
 ```
-Party summary
-✓ MOMMA MIA — shipped HEIC→WebP uploader, chatbot fix; pushed a1b2c3d
-↻ PIXEL PERF — sent back: finish DB review, run tests (round 2)
-⚠ SHOPIFY KGH — needs you: approve publish to prod
+Party summary · 4:33 PM
+✓ PIXEL PERF — approved
+   Landed: composer limits, dead-number warning; pushed 2c95eb0
+↻ SHOPIFY KGH — sent back (round 2)
+   To do: run the 24 tests, fix the KY state mapping
+⤴ MOMMA MIA — escalated: 4 decisions for you
+   Landed: chatbot fix, DB hardening
+   You: PayPal webhook ID · Resend SMTP or skip confirm · service role key · /stage-deploy
 · HABITS COLLEGIATE — skipped (still working)
 ```
 
-Only *major* changes and fixes go in the ✓ lines (features shipped, bugs fixed, data changed,
-deploys) — not every file touched. `· skipped` = its turn wasn't finished; record nothing for it.
+- **Landed** = only major changes/fixes (features shipped, bugs fixed, data changed, deploys).
+- **You** = each decision as a few words, separated by ` · ` — the detail is in the worker's terminal.
+- If you already recorded a verdict for this session and it has **no new turn since**, don't
+  re-review: one line `· MOMMA MIA — no change since last review` and record nothing.
+- The needs-you verdict note follows the same shape: `Needs you: PayPal webhook ID · Resend SMTP … `.
 
 ## Rules
 
