@@ -56,6 +56,17 @@ export class Reviews {
     const round = Number.isInteger(o['round']) && (o['round'] as number) >= 0 ? (o['round'] as number) : 0;
     const at = typeof o['at'] === 'number' ? o['at'] : Date.now();
     const turnDoneAt = typeof o['turnDoneAt'] === 'number' ? o['turnDoneAt'] : undefined;
+    const steps = Array.isArray(o['steps'])
+      ? (o['steps'] as unknown[])
+          .map((x) => {
+            const r = x && typeof x === 'object' ? (x as Record<string, unknown>) : {};
+            const label = typeof r['label'] === 'string' ? r['label'].replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 60) : '';
+            const state = r['state'] === 'done' || r['state'] === 'you' ? r['state'] : 'todo';
+            return label ? { label, state: state as 'done' | 'you' | 'todo' } : null;
+          })
+          .filter((x): x is { label: string; state: 'done' | 'you' | 'todo' } => x !== null)
+          .slice(0, 12)
+      : [];
     const replies = Array.isArray(o['replies'])
       ? (o['replies'] as unknown[])
           .filter((r): r is string => typeof r === 'string')
@@ -63,7 +74,7 @@ export class Reviews {
           .filter(Boolean)
           .slice(0, 4)
       : [];
-    return { sessionId, verdict: verdict as ReviewVerdict['verdict'], note, round, ...(replies.length ? { replies } : {}), at, ...(turnDoneAt !== undefined ? { turnDoneAt } : {}) };
+    return { sessionId, verdict: verdict as ReviewVerdict['verdict'], note, round, ...(replies.length ? { replies } : {}), at, ...(turnDoneAt !== undefined ? { turnDoneAt } : {}), ...(steps.length ? { steps } : {}) };
   }
 
   /** `turnDoneAt` comes from the server's own agent state, never from the request body. */

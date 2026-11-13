@@ -895,3 +895,108 @@
 .party-card-standby.party-card-selected {
   border-color: var(--gold);
 }
+
+/* ── Delegated-task progress (Leader checklist: done ÷ total) ───────────── */
+
+.party-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  min-width: 0;
+  cursor: help;
+}
+
+.party-progress-bar {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 40px;
+  height: 8px;
+  padding: 1px;
+  background: var(--bg-0);
+  border: 1px solid var(--line-3);
+}
+
+.party-progress-seg {
+  flex: 1 1 0;
+  background: var(--bg-5);
+}
+
+.party-progress-seg-done {
+  background: var(--status-done);
+}
+
+.party-progress-seg-you {
+  background: var(--gold);
+  animation: party-progress-pulse 1.6s steps(2, jump-none) infinite;
+}
+
+@keyframes party-progress-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .party-progress-seg-you {
+    animation: none;
+  }
+}
+
+.party-progress-pct {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--status-done);
+  font-variant-numeric: tabular-nums;
+}
+
+.party-progress-pct-you {
+  color: var(--gold);
+}
+
+.party-progress-next {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.party-progress-mini {
+  margin-left: 4px;
+  cursor: help;
+}
+
+.party-progress-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px dashed var(--line-3);
+}
+
+.party-progress-row {
+  display: grid;
+  grid-template-columns: minmax(0, 5.5em) 1fr;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.party-progress-row:hover .party-progress-name,
+.party-progress-row:focus-visible .party-progress-name {
+  color: var(--gold);
+}
+
+.party-progress-name {
+  overflow: hidden;
+  font-size: 10px;
+  color: var(--text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.party-progress-compact {
+  margin-top: 0;
+}

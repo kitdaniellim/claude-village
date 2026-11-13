@@ -205,6 +205,14 @@ export interface ReviewVerdict {
   /** The worker's lastTurnDoneAt when the verdict landed — the turn it judged. A human prompt after
    *  this settles a needs-you verdict. */
   turnDoneAt?: number;
+  /** The task as a short checklist the Leader keeps up to date — progress = done ÷ total. */
+  steps?: ReviewStep[];
+}
+
+/** One step of a delegated task: done, waiting on the user, or still to do by the worker. */
+export interface ReviewStep {
+  label: string;
+  state: 'done' | 'you' | 'todo';
 }
 
 export interface ReviewsResponse {

@@ -108,31 +108,43 @@ Record the verdict — the note is what the user sees on the card, so make it th
 ```bash
 curl -s -X POST localhost:4444/api/review -H 'content-type: application/json' \
   -H "X-RTS-Token: $(cat ~/.rts-agents/review-token)" \
-  -d '{"sessionId":"<session>","verdict":"approved|changes|needs-you","note":"<= 200 chars","round":N}'
+  -d '{"sessionId":"<session>","verdict":"approved|changes|needs-you","note":"<= 200 chars","round":N,
+       "steps":[{"label":"Migration applied on prod","state":"done"},
+                {"label":"Delete 97 unused photos","state":"you"},
+                {"label":"Push + deploy","state":"todo"}]}'
 ```
+
+**Always send `steps`** — the task as a checklist (3–8 steps, ≤ 40 chars each, 12 max). The village
+draws it as each project's progress bar (% = done ÷ total), so it must reflect the user's whole
+goal for this task, not just this turn:
+- `done` = verified landed · `you` = waiting on the user (needs-you items, secrets, their git) ·
+  `todo` = the worker still has to do it.
+- **Keep the same list across rounds** — read your previous verdict first
+  (`curl -s localhost:4444/api/reviews`, match `sessionId`) and flip states / append new steps rather
+  than rewriting it, so the bar only moves forward. Start a fresh list only when the user gave the
+  worker a new task.
+- Approved with nothing left = every step `done` (100%).
 
 ## 4. Output — a summary every time
 
-End every review call with a short, scannable summary and nothing else. One status line per
-session (≤ ~60 chars), then at most two short bullet groups. Never restate the user's request or
-the worker's message, never narrate what you checked:
+End every review call with a short progress board and nothing else: per session, ONE line with a
+10-cell bar from its `steps` (█ per done tenth, ░ for the rest), the %, and the state; then only the
+`You:` line when something waits on the user. No prose, no "Landed" paragraphs, never restate the
+request or narrate what you checked:
 
 ```
-Party summary · 4:33 PM
-✓ PIXEL PERF — approved
-   Landed: composer limits, dead-number warning; pushed 2c95eb0
-↻ SHOPIFY KGH — sent back (round 2)
-   To do: run the 24 tests, fix the KY state mapping
-⤴ MOMMA MIA — escalated: 4 decisions for you
-   Landed: chatbot fix, DB hardening
-   You: PayPal webhook ID · Resend SMTP or skip confirm · service role key · /stage-deploy
-· HABITS COLLEGIATE — skipped (still working)
+Party · 4:33 PM
+✓ PIXEL PERF   ██████████ 100%  approved
+↻ SHOPIFY KGH  ██████░░░░  60%  sent back · round 2
+⤴ MOMMA MIA    ███████░░░  71%  waiting on you
+   You: /stage-deploy in its chat · add SUPABASE_DB_URL + BACKUP_PASSPHRASE secrets
+· HABITS COLL. —                 still working
 ```
 
-- **Landed** = only major changes/fixes (features shipped, bugs fixed, data changed, deploys).
-- **You** = each decision as a few words, separated by ` · ` — the detail is in the worker's terminal.
+- Pad names so the bars line up; cells = round(% / 10).
+- **You** = each thing waiting on the user, a few words each, separated by ` · `.
 - If you already recorded a verdict for this session and it has **no new turn since**, don't
-  re-review: one line `· MOMMA MIA — no change since last review` and record nothing.
+  re-review: print its bar line from the previous verdict with `no change` and record nothing.
 - The needs-you verdict note follows the same shape: `Needs you: PayPal webhook ID · Resend SMTP … `.
 
 ## Rules

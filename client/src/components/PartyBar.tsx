@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject } from 'react';
 import { usePersistentState } from '../hooks/usePersistentState';
-import type { AgentState, AgentStatus, RallySession, ReviewVerdict, SquireInfo } from '../types/agent';
+import type { AgentState, AgentStatus, RallySession, ReviewStep, ReviewVerdict, SquireInfo } from '../types/agent';
 import type { Rally } from '../hooks/useRally';
 import RallyCard from './RallyCard';
 import MoveCard from './MoveCard';
@@ -145,6 +145,14 @@ export default function PartyBar(props: PartyBarProps) {
   });
   // Sessions the Leader manages that are waiting on the user — shown on the Leader's card.
   const needsYou = verdicts.filter((v) => v.verdict === 'needs-you' && reviewIds.includes(v.sessionId));
+  // Per-project progress for the Leader card: every delegated session whose verdict has a checklist.
+  const progressRows = reviewIds
+    .map((id) => {
+      const v = allVerdicts.find((x) => x.sessionId === id);
+      const ag = agents.find((x) => x.sessionId === id);
+      return v?.steps?.length && ag ? { id, name: ag.customTitle ?? id.slice(0, 8), steps: v.steps } : null;
+    })
+    .filter((r): r is { id: string; name: string; steps: ReviewStep[] } => r !== null);
   const needsYouTip = needsYou
     .map((v) => `${agents.find((a) => a.sessionId === v.sessionId)?.customTitle ?? v.sessionId.slice(0, 8)}: ${v.note || 'needs you'}`)
     .join('\n');
@@ -372,6 +380,10 @@ export default function PartyBar(props: PartyBarProps) {
           {!isTheLeader && reviewIds.includes(a.sessionId) && (
             <ReviewBadge verdict={verdicts.find((v) => v.sessionId === a.sessionId) ?? null} queued={reviewQueue.includes(a.sessionId)} mini />
           )}
+          {!isTheLeader && reviewIds.includes(a.sessionId) && (() => {
+            const steps = allVerdicts.find((v) => v.sessionId === a.sessionId)?.steps;
+            return steps?.length ? <ProgressMeter steps={steps} mini /> : null;
+          })()}
           <StatusPill status={a.status} yourTurn={yourTurn} standby={onStandby && !working} />
           <span className="party-when">{relTime(a.lastEventAt, now + skewMs)}</span>
         </button>
@@ -487,6 +499,36 @@ export default function PartyBar(props: PartyBarProps) {
                 )}
               </span>
             )}
+            {isTheLeader && progressRows.length > 0 && (
+              <span className="party-progress-list">
+                {progressRows.map((r) => (
+                  <span
+                    key={r.id}
+                    className="party-progress-row"
+                    role="link"
+                    tabIndex={0}
+                    title={`Open ${r.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelect(r.id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter' && e.key !== ' ') return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onSelect(r.id);
+                    }}
+                  >
+                    <span className="party-progress-name">{r.name}</span>
+                    <ProgressMeter steps={r.steps} compact />
+                  </span>
+                ))}
+              </span>
+            )}
+            {!isTheLeader && reviewIds.includes(a.sessionId) && (() => {
+              const steps = allVerdicts.find((v) => v.sessionId === a.sessionId)?.steps;
+              return steps?.length ? <ProgressMeter steps={steps} /> : null;
+            })()}
             <span className="party-flavor">{flavorLine(a)}</span>
             {shownBranch && <span className="party-branch">⎇ {shownBranch}</span>}
           </span>
@@ -674,7 +716,42 @@ export default function PartyBar(props: PartyBarProps) {
   );
 }
 
-/** Placeholder for a hero whose terminal came back after a restart (or a launch not yet adopted). */
+const STEP_MARK: Record<ReviewStep['state'], string> = { done: '✓', you: '⤴', todo: '·' };
+
+/** A delegated task's checklist as one pixel segment per step (green done, amber waiting on you,
+ *  dim to do) + "60%". Hover lists the steps. */
+function ProgressMeter({ steps, compact = false, mini = false }: { steps: ReviewStep[]; compact?: boolean; mini?: boolean }) {
+  const done = steps.filter((s) => s.state === 'done').length;
+  const yours = steps.filter((s) => s.state === 'you').length;
+  const pct = Math.round((done / steps.length) * 100);
+  const tip = [
+    `${pct}% · ${done}/${steps.length} steps done${yours ? ` · ${yours} waiting on you` : ''}`,
+    ...steps.map((s) => `${STEP_MARK[s.state]} ${s.label}${s.state === 'you' ? ' (you)' : ''}`),
+  ].join('\n');
+  if (mini) {
+    return (
+      <span className={`party-progress-pct party-progress-mini ${yours ? 'party-progress-pct-you' : ''}`} title={tip}>
+        {pct}%
+      </span>
+    );
+  }
+  return (
+    <span className={`party-progress ${compact ? 'party-progress-compact' : ''}`} title={tip}>
+      <span className="party-progress-bar" aria-hidden="true">
+        {steps.map((s, i) => (
+          <span key={i} className={`party-progress-seg party-progress-seg-${s.state}`} />
+        ))}
+      </span>
+      <span className={`party-progress-pct ${yours ? 'party-progress-pct-you' : ''}`}>{pct}%</span>
+      {!compact && (
+        <span className="party-progress-next">
+          {yours ? `${yours} for you` : done === steps.length ? 'all done' : `${steps.length - done} to go`}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /** Where an opted-in party stands with the Leader; the note shows on hover. */
 function ReviewBadge({
   verdict,
