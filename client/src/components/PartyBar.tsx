@@ -220,6 +220,19 @@ export default function PartyBar(props: PartyBarProps) {
     });
   }, [presentKey, setOrder]);
 
+  // Going on standby sends a session to the bottom once — a plain order edit, so you can still
+  // drag it back up. Only fresh standbys move (not the ones already set when the bar mounted).
+  const standbySeen = useRef<Set<string>>(new Set(Object.keys(standby)));
+  const standbyKey = Object.keys(standby).sort().join('|');
+  useEffect(() => {
+    const now = new Set(Object.keys(standby));
+    const fresh = [...now].filter((id) => !standbySeen.current.has(id));
+    standbySeen.current = now;
+    if (fresh.length === 0) return;
+    const sinking = new Set(fresh);
+    setOrder((cur) => [...cur.filter((id) => !sinking.has(id)), ...fresh]);
+  }, [standbyKey, setOrder]);
+
   const rank = useMemo(() => new Map(order.map((id, i) => [id, i])), [order]);
   const byRank = (a: string, b: string): number => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity);
 
