@@ -57,25 +57,36 @@ export default function RallyCard({ rally, onRally }: RallyCardProps) {
 
   return (
     <section className={`rally ${outage ? 'rally-outage' : ''}`} aria-label="Reopen recent sessions">
-      <div className="rally-head">
+      {/* One line: what it is · Rally · Choose · dismiss. */}
+      <div className="rally-row-main">
         <span className="rally-glyph" aria-hidden="true">
           {outage ? '⚡' : '↻'}
         </span>
-        <span className="rally-title">
-          {outage ? (
-            <>
-              Village went dark · {clock(cutAt)}
-              <span className="rally-sub">
-                {cutCount} {cutCount === 1 ? 'hero was' : 'heroes were'} out
-              </span>
-            </>
-          ) : (
-            <>
-              Recently closed
-              <span className="rally-sub">last {hours} h</span>
-            </>
-          )}
+        <span
+          className="rally-title"
+          title={outage ? `Village went dark at ${clock(cutAt)} — ${cutCount} ${cutCount === 1 ? 'hero was' : 'heroes were'} out` : `Closed in the last ${hours} h`}
+        >
+          {outage ? `Dark · ${clock(cutAt)}` : 'Closed'}
         </span>
+        <button
+          type="button"
+          className={`ui-btn ${outage ? 'ui-btn-primary' : ''} rally-go`}
+          disabled={chosen.length === 0}
+          onClick={() => onRally(chosen)}
+          title="Resume each session in its own terminal tab, one after another"
+        >
+          ↻ Rally {chosen.length}
+        </button>
+        <button
+          type="button"
+          className="ui-btn ui-btn-ghost rally-choose"
+          aria-expanded={open}
+          aria-label="Choose which to rally"
+          title="Choose which to rally"
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? '▾' : '▸'}
+        </button>
         <button
           type="button"
           className="rally-x"
@@ -84,27 +95,6 @@ export default function RallyCard({ rally, onRally }: RallyCardProps) {
           onClick={() => rally.dismiss(sessions)}
         >
           ×
-        </button>
-      </div>
-
-      <div className="rally-actions">
-        <button
-          type="button"
-          className={`ui-btn ${outage ? 'ui-btn-primary' : ''} rally-go`}
-          disabled={chosen.length === 0}
-          onClick={() => onRally(chosen)}
-          title="Resume each session in its own terminal tab, one after another"
-        >
-          ↻ Rally {chosen.length === sessions.length && chosen.length > 1 ? 'all ' : ''}
-          {chosen.length}
-        </button>
-        <button
-          type="button"
-          className="ui-btn ui-btn-ghost rally-choose"
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? '▾' : '▸'} Choose
         </button>
       </div>
 

@@ -1,7 +1,7 @@
 /* "Move into the village" under Create Party. */
 .move {
   flex: 0 0 auto;
-  margin: 6px 6px 0;
+  margin: 5px 6px 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -9,7 +9,7 @@
 
 .move-btn {
   width: 100%;
-  height: 28px;
+  height: 26px;
 }
 
 .move-confirm {

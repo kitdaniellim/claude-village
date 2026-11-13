@@ -23,7 +23,7 @@ import type { MoveRequest, MoveStatus, PlaceRequest, RallyRequest } from './comp
 import type { RallySession } from './types/agent';
 import type { BlockedMap, SleepingHero } from './utils/terminalTabs';
 import { BLOCKED_MAX, BLOCKED_NOTE_MAX, isBlockedMap } from './utils/terminalTabs';
-import { isLeader } from './utils/agentLabel';
+import { LEADER_NAME, leaderOf } from './utils/agentLabel';
 import { useReviews } from './hooks/useReviews';
 import RewardsPanel from './components/RewardsPanel';
 import AwardToasts from './components/AwardToasts';
@@ -138,7 +138,7 @@ export default function App() {
   );
   // Party Leader: which parties it reviews (saved), its verdicts, the review queue, recruit clicks.
   const [reviewIds, setReviewIds] = usePersistentState<string[]>('party-review', [], isStringList);
-  const leaderAlive = agents.some((a) => a.alive && isLeader(a));
+  const leaderAlive = !!leaderOf(agents)?.alive;
   const verdicts = useReviews(reviewIds.length > 0 || leaderAlive);
   const [reviewQueue, setReviewQueue] = useState<string[]>([]);
   const [leaderRequest, setLeaderRequest] = useState<{ nonce: number } | null>(null);
@@ -147,10 +147,6 @@ export default function App() {
       setReviewIds((cur) => (cur.includes(sessionId) ? cur.filter((x) => x !== sessionId) : [...cur, sessionId].slice(-40))),
     [setReviewIds],
   );
-  const handleRecruitLeader = useCallback(() => {
-    setLeaderRequest((prev) => ({ nonce: (prev?.nonce ?? 0) + 1 }));
-    setDrawerOpen(true);
-  }, []);
   // The drawer switched terminals on its own (Create Party, Rally, Move): highlight that hero.
   const handleActiveChange = useCallback((id: string | null) => {
     if (id) setSelectedSessionId(id);
@@ -194,6 +190,18 @@ export default function App() {
     },
     [closeRewards],
   );
+
+  // Only ever one Leader: if one exists (running, ended or asleep in a tab) open it instead.
+  const existingLeaderId =
+    leaderOf(agents)?.sessionId ?? sleepers.find((s) => s.name.trim().toUpperCase() === LEADER_NAME)?.sessionId ?? null;
+  const handleRecruitLeader = useCallback(() => {
+    if (existingLeaderId) {
+      handleSelectAgent(existingLeaderId);
+      return;
+    }
+    setLeaderRequest((prev) => ({ nonce: (prev?.nonce ?? 0) + 1 }));
+    setDrawerOpen(true);
+  }, [existingLeaderId, handleSelectAgent]);
 
   // A Create Party / Fetch Squire hero just appeared for its tab: highlight it and pulse the map,
   // unless the user picked someone after launching. Its tab is already open, so no terminal routing.

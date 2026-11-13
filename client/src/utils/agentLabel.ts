@@ -17,6 +17,19 @@ export function isLeader(a: { customTitle: string | null }): boolean {
   return a.customTitle?.trim().toUpperCase() === LEADER_NAME;
 }
 
+/**
+ * THE Party Leader — there is only ever one. If several sessions carry the name (an old one that
+ * ended, a test), a live one beats an ended one, then the most recently active wins.
+ */
+export function leaderOf<T extends { customTitle: string | null; alive: boolean; lastEventAt: number }>(agents: T[]): T | null {
+  let best: T | null = null;
+  for (const a of agents) {
+    if (!isLeader(a)) continue;
+    if (!best || (a.alive && !best.alive) || (a.alive === best.alive && a.lastEventAt > best.lastEventAt)) best = a;
+  }
+  return best;
+}
+
 /** Forked sessions are named "Squire of <parent>" (mirrors the server's SQUIRE_NAME_RE). */
 export const SQUIRE_NAME_RE = /^Squire of (.+)$/;
 

@@ -22,8 +22,8 @@ import {
   agentName,
   agentPlaceLabel,
   agentSubtitle,
-  isLeader,
   LEADER_NAME,
+  leaderOf,
   relTime,
   squireParentName,
 } from '../utils/agentLabel';
@@ -65,6 +65,8 @@ interface PartyBarProps {
 
 /** Saved party order (session ids, `tab:<id>` for launches); prefs values are size-capped. */
 const MAX_ORDER = 80;
+
+const isPartyView = (v: unknown): v is 'cards' | 'list' => v === 'cards' || v === 'list';
 
 function isStringArray(v: unknown): v is string[] {
   return Array.isArray(v) && v.every((x) => typeof x === 'string');
@@ -119,7 +121,11 @@ export default function PartyBar(props: PartyBarProps) {
   const { agents, skewMs, selectedSessionId, onSelect, filterRef, onCreateParty, sleepers = [], rally, onRally } = props;
   const { moveStatus = null, onMove, onCancelMove, onRestartApp = null, onDismiss, blocked = {} } = props;
   const { reviewIds = [], verdicts = [], reviewQueue = [], onRecruitLeader } = props;
-  const hasLeader = agents.some((a) => a.alive && isLeader(a)) || sleepers.some((s) => s.name.trim().toUpperCase() === LEADER_NAME);
+  // Only ever one Leader (live beats ended, then most recent); a sleeping Leader tab counts too.
+  const leaderId =
+    leaderOf(agents)?.sessionId ?? sleepers.find((s) => s.name.trim().toUpperCase() === LEADER_NAME)?.sessionId ?? null;
+  const [view, setView] = usePersistentState<'cards' | 'list'>('party-view', 'cards', isPartyView);
+  const compact = view === 'list';
   const [now, setNow] = useState(() => Date.now());
   const [filter, setFilter] = useState('');
   const [order, setOrder] = usePersistentState<string[]>('party-order', [], isStringArray);
@@ -273,6 +279,8 @@ export default function PartyBar(props: PartyBarProps) {
     const offline = !a.alive && a.pid !== null;
     // Not the user's turn while a squire is still out — the main turn may resume on its own.
     const yourTurn = a.alive && (a.status === 'done' || a.ccStatus === 'idle') && squires.length === 0;
+    const working = a.alive && !yourTurn && (a.status === 'running' || a.status === 'thinking' || a.status === 'delegating');
+    const isTheLeader = a.sessionId === leaderId;
     const goParent = parent ? () => onSelect(parent.sessionId) : null;
     const shownBranch = featureBranch(branch);
     // The session id, place and raw tool detail live here only — the card shows the friendly bits.
@@ -292,9 +300,37 @@ export default function PartyBar(props: PartyBarProps) {
       'party-card',
       selected ? 'party-card-selected' : '',
       yourTurn ? 'party-card-yourturn' : '',
+      working ? 'party-card-working' : '',
+      compact ? 'party-card-compact' : '',
       a.isSquire ? 'party-card-squire' : '',
       nested ? 'party-card-nested' : '',
     ].join(' ');
+    if (compact) {
+      // List view: one line — face, name, the badges that matter, status, time.
+      return (
+        <button
+          key={a.sessionId}
+          type="button"
+          data-session={a.sessionId}
+          className={classes}
+          aria-pressed={selected}
+          onClick={() => onSelect(a.sessionId)}
+          title={tooltip}
+        >
+          <Portrait sessionId={a.sessionId} color={color} scale={1} squire={a.isSquire} className="party-avatar party-avatar-mini" />
+          <span className="party-mini-name">
+            {isTheLeader && <span aria-label="Party Leader">👑 </span>}
+            {name}
+          </span>
+          {mark && <BlockedBadge mark={mark} mini />}
+          {!isTheLeader && reviewIds.includes(a.sessionId) && (
+            <ReviewBadge verdict={verdicts.find((v) => v.sessionId === a.sessionId) ?? null} queued={reviewQueue.includes(a.sessionId)} mini />
+          )}
+          <StatusPill status={a.status} yourTurn={yourTurn} />
+          <span className="party-when">{relTime(a.lastEventAt, now + skewMs)}</span>
+        </button>
+      );
+    }
     return (
       <button
         key={a.sessionId}
@@ -360,14 +396,14 @@ export default function PartyBar(props: PartyBarProps) {
                 ⚔ squire of {parentName}
               </span>
             )}
-            {(offline || a.status === 'delegating' || blocked[a.sessionId] || isLeader(a) || reviewIds.includes(a.sessionId)) && (
+            {(offline || a.status === 'delegating' || blocked[a.sessionId] || isTheLeader || reviewIds.includes(a.sessionId)) && (
               <span className="party-badges">
-                {isLeader(a) && (
+                {isTheLeader && (
                   <span className="party-badge party-badge-leader" title="Party Leader — reviews opted-in parties when they finish a turn">
                     👑 Party Leader
                   </span>
                 )}
-                {!isLeader(a) && reviewIds.includes(a.sessionId) && (
+                {!isTheLeader && reviewIds.includes(a.sessionId) && (
                   <ReviewBadge verdict={verdicts.find((v) => v.sessionId === a.sessionId) ?? null} queued={reviewQueue.includes(a.sessionId)} />
                 )}
                 {blocked[a.sessionId] && <BlockedBadge mark={blocked[a.sessionId] as BlockedMark} />}
@@ -403,6 +439,46 @@ export default function PartyBar(props: PartyBarProps) {
     );
   };
 
+  /** One draggable slot: the card (or placeholder), its ✕, and squires indented under it. */
+  const renderSlot = (slot: Slot): ReactNode => {
+    const name = slot.card ? slot.card.name : (slot.sleeper?.name ?? '');
+    const classes = [
+      'party-slot',
+      dragId === slot.id ? 'party-slot-dragging' : '',
+      dropAt?.id === slot.id ? (dropAt.after ? 'party-slot-drop-after' : 'party-slot-drop-before') : '',
+    ].join(' ');
+    return (
+      <div
+        key={slot.id}
+        className={classes}
+        draggable={!q}
+        onDragStart={(e) => onDragStart(e, slot.id)}
+        onDragOver={(e) => onDragOver(e, slot.id)}
+        onDrop={onDrop}
+      >
+        {slot.card
+          ? renderCard(slot.card)
+          : slot.sleeper && (
+              <SleeperCard
+                hero={slot.sleeper}
+                selected={slot.id === selectedSessionId}
+                onSelect={onSelect}
+                mark={blocked[slot.sleeper.sessionId] ?? null}
+                compact={compact}
+                leader={slot.id === leaderId}
+              />
+            )}
+        {dismissControls(slot.id, name)}
+        {slot.children.map((kid) => (
+          <div key={kid.agent.sessionId} className="party-slot party-slot-kid">
+            {renderCard(kid)}
+            {dismissControls(kid.agent.sessionId, kid.name)}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   /** Hover ✕ → inline "End this session?" — the card's own button can't hold another button. */
   const dismissControls = (id: string, name: string): ReactNode =>
     !onDismiss ? null : confirmId === id ? (
@@ -435,7 +511,7 @@ export default function PartyBar(props: PartyBarProps) {
     );
 
   return (
-    <aside className="party">
+    <aside className={`party ${compact ? 'party-compact' : ''}`}>
       <div className="party-header">
         <span className="party-title">Party</span>
         <span className="party-count">{shown}</span>
@@ -450,29 +526,48 @@ export default function PartyBar(props: PartyBarProps) {
           aria-label="Filter party by title, project or place"
           spellCheck={false}
         />
+        <span className="party-view" role="group" aria-label="Party view">
+          <button
+            type="button"
+            className={`party-view-btn ${!compact ? 'party-view-on' : ''}`}
+            aria-pressed={!compact}
+            onClick={() => setView('cards')}
+            title="Cards — portraits and details"
+          >
+            ▦
+          </button>
+          <button
+            type="button"
+            className={`party-view-btn ${compact ? 'party-view-on' : ''}`}
+            aria-pressed={compact}
+            onClick={() => setView('list')}
+            title="List — one compact line per party"
+          >
+            ≡
+          </button>
+        </span>
       </div>
-      <div className="party-create-row">
+      {/* One toolbar row instead of stacked full-width buttons. */}
+      <div className="party-toolbar">
         <button
           type="button"
           className="ui-btn ui-btn-primary party-create"
           onClick={onCreateParty}
-          title="Pick a place, then start a fresh Claude Code session there"
+          title="Start a fresh Claude Code session"
         >
-          <span aria-hidden="true">✦</span> Create Party <span className="party-create-sub">(New Session)</span>
+          <span aria-hidden="true">✦</span> New session
         </button>
-      </div>
-      {onRecruitLeader && !hasLeader && (
-        <div className="party-create-row party-leader-row">
+        {onRecruitLeader && (
           <button
             type="button"
             className="ui-btn party-recruit"
             onClick={onRecruitLeader}
-            title="Start a PARTY LEADER session that reviews opted-in parties (👑 Review in the drawer) whenever they finish a turn"
+            title={leaderId ? 'Open the Party Leader' : 'Recruit a Party Leader — one session that reviews and manages the others'}
           >
-            👑 Recruit Party Leader
+            👑 {leaderId ? 'Leader' : 'Recruit'}
           </button>
-        </div>
-      )}
+        )}
+      </div>
       {onMove && onCancelMove && (
         <MoveCard status={moveStatus} onMove={onMove} onCancel={onCancelMove} onRestart={onRestartApp} />
       )}
@@ -486,42 +581,33 @@ export default function PartyBar(props: PartyBarProps) {
           </div>
         )}
         {shown > 0 && slots.length === 0 && <div className="party-empty">No hero matches “{filter.trim()}”.</div>}
-        {slots.map((slot) => {
-          const name = slot.card ? slot.card.name : (slot.sleeper?.name ?? '');
-          const classes = [
-            'party-slot',
-            dragId === slot.id ? 'party-slot-dragging' : '',
-            dropAt?.id === slot.id ? (dropAt.after ? 'party-slot-drop-after' : 'party-slot-drop-before') : '',
-          ].join(' ');
+        {(() => {
+          const leaderSlot = slots.find((s) => s.id === leaderId) ?? null;
+          const reviewed = slots.filter((s) => s.id !== leaderId && reviewIds.includes(s.id));
+          const rest = slots.filter((s) => s.id !== leaderId && !reviewIds.includes(s.id));
+          const hasLeaderSection = !!leaderSlot || reviewed.length > 0;
           return (
-            <div
-              key={slot.id}
-              className={classes}
-              draggable={!q}
-              onDragStart={(e) => onDragStart(e, slot.id)}
-              onDragOver={(e) => onDragOver(e, slot.id)}
-              onDrop={onDrop}
-            >
-              {slot.card
-                ? renderCard(slot.card)
-                : slot.sleeper && (
-                    <SleeperCard
-                      hero={slot.sleeper}
-                      selected={slot.id === selectedSessionId}
-                      onSelect={onSelect}
-                      mark={blocked[slot.sleeper.sessionId] ?? null}
-                    />
-                  )}
-              {dismissControls(slot.id, name)}
-              {slot.children.map((kid) => (
-                <div key={kid.agent.sessionId} className="party-slot party-slot-kid">
-                  {renderCard(kid)}
-                  {dismissControls(kid.agent.sessionId, kid.name)}
+            <>
+              {hasLeaderSection && (
+                <section className="party-section party-section-leader" aria-label="Party Leader and reviewed parties">
+                  <div className="party-section-head">
+                    <span>👑 Party Leader</span>
+                    {reviewed.length > 0 && <span className="party-section-n">{reviewed.length} reviewed</span>}
+                  </div>
+                  {leaderSlot ? renderSlot(leaderSlot) : <div className="party-section-empty">No leader yet — 👑 Recruit above.</div>}
+                  {reviewed.length > 0 && <div className="party-section-kids">{reviewed.map(renderSlot)}</div>}
+                </section>
+              )}
+              {hasLeaderSection && rest.length > 0 && (
+                <div className="party-section-head">
+                  <span>Party</span>
+                  <span className="party-section-n">{rest.length}</span>
                 </div>
-              ))}
-            </div>
+              )}
+              {rest.map(renderSlot)}
+            </>
           );
-        })}
+        })()}
       </div>
     </aside>
   );
@@ -529,7 +615,17 @@ export default function PartyBar(props: PartyBarProps) {
 
 /** Placeholder for a hero whose terminal came back after a restart (or a launch not yet adopted). */
 /** Where an opted-in party stands with the Leader; the note shows on hover. */
-function ReviewBadge({ verdict, queued }: { verdict: ReviewVerdict | null; queued: boolean }) {
+function ReviewBadge({ verdict, queued, mini = false }: { verdict: ReviewVerdict | null; queued: boolean; mini?: boolean }) {
+  if (mini) {
+    const icon = queued ? '👑…' : !verdict ? '👑' : verdict.verdict === 'approved' ? '👑✓' : verdict.verdict === 'changes' ? `👑${verdict.round}` : '👑!';
+    const tone = queued || !verdict ? '' : `party-badge-review-${verdict.verdict}`;
+    const tip = queued ? 'Waiting for the Party Leader' : verdict ? verdict.note || verdict.verdict : 'Reviewed by the Party Leader';
+    return (
+      <span className={`party-badge party-badge-review party-badge-mini ${tone}`} title={tip}>
+        {icon}
+      </span>
+    );
+  }
   if (queued) {
     return (
       <span className="party-badge party-badge-review" title="Waiting for the Party Leader's review">
@@ -554,10 +650,13 @@ function ReviewBadge({ verdict, queued }: { verdict: ReviewVerdict | null; queue
 }
 
 /** Red BLOCKED chip; hovering shows the note (the label is a reminder — nothing else changes). */
-function BlockedBadge({ mark }: { mark: BlockedMark }) {
+function BlockedBadge({ mark, mini = false }: { mark: BlockedMark; mini?: boolean }) {
   return (
-    <span className="party-badge party-badge-blocked" title={mark.note ? `Blocked: ${mark.note}` : 'Blocked — no note'}>
-      ⛔ Blocked
+    <span
+      className={`party-badge party-badge-blocked ${mini ? 'party-badge-mini' : ''}`}
+      title={mark.note ? `Blocked: ${mark.note}` : 'Blocked — no note'}
+    >
+      {mini ? '⛔' : '⛔ Blocked'}
     </span>
   );
 }
@@ -567,11 +666,15 @@ function SleeperCard({
   selected,
   onSelect,
   mark,
+  compact = false,
+  leader = false,
 }: {
   hero: SleepingHero;
   selected: boolean;
   onSelect: (id: string) => void;
   mark: BlockedMark | null;
+  compact?: boolean;
+  leader?: boolean;
 }) {
   const color = heroColor(s.sessionId);
   const line = s.launching
@@ -581,6 +684,26 @@ function SleeperCard({
     : s.asleep
       ? 'asleep in the tavern — click to wake'
       : 'waking up…';
+  if (compact) {
+    return (
+      <button
+        type="button"
+        data-session={s.sessionId}
+        className={`party-card party-card-sleeper party-card-compact ${selected ? 'party-card-selected' : ''}`}
+        aria-pressed={selected}
+        onClick={() => onSelect(s.sessionId)}
+        title={`${s.name}\n${line}`}
+      >
+        <Portrait sessionId={s.sessionId} color={color} scale={1} squire={s.squire} className="party-avatar party-avatar-mini" />
+        <span className="party-mini-name">
+          {leader && <span aria-label="Party Leader">👑 </span>}
+          {s.name}
+        </span>
+        {mark && <BlockedBadge mark={mark} mini />}
+        <span className="party-pill party-pill-sleeper">{s.launching ? '✦ New' : s.asleep ? '💤' : '…'}</span>
+      </button>
+    );
+  }
   return (
     <button
       type="button"
@@ -596,9 +719,10 @@ function SleeperCard({
           <span className="party-hero">
             <span className="party-name">{s.name}</span>
           </span>
-          {mark && (
+          {(mark || leader) && (
             <span className="party-badges">
-              <BlockedBadge mark={mark} />
+              {leader && <span className="party-badge party-badge-leader">👑 Party Leader</span>}
+              {mark && <BlockedBadge mark={mark} />}
             </span>
           )}
           <span className="party-flavor">{line}</span>

@@ -594,25 +594,51 @@
 
 /* ── Your turn: the status pill itself lights up (no separate chip) ─────────── */
 
+/* ── Status themes: working = green, your turn = amber warning ──────────── */
+
+.party-card-working {
+  border-color: #166534;
+  border-left: 4px solid #4ade80;
+  background: linear-gradient(90deg, rgba(74, 222, 128, 0.1), transparent 55%), var(--bg-4);
+}
+
+.party-card-working .party-pill {
+  color: #052e16 !important;
+  background: #4ade80 !important;
+  border-color: #86efac !important;
+}
+
+.party-card-working .party-pill .party-dot {
+  background: #052e16 !important;
+}
+
+.party-card-yourturn {
+  border-color: #92400e;
+  border-left: 4px solid #f59e0b;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.14), transparent 60%), var(--bg-4);
+}
+
 .party-pill-yourturn {
-  color: var(--bg-1) !important;
-  background: var(--gold) !important;
-  border-color: var(--gold-hi) !important;
-  box-shadow: 0 0 8px var(--gold-glow);
+  color: #1c1003 !important;
+  background: #f59e0b !important;
+  border-color: #fbbf24 !important;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.55);
   animation: party-yourturn-pulse 2.4s ease-in-out infinite;
 }
 
 .party-pill-yourturn .party-dot {
-  background: var(--bg-1) !important;
+  background: #1c1003 !important;
 }
 
-.party-card-yourturn {
-  border-left-color: var(--gold);
+/* Selection keeps its gold frame on top of either theme. */
+.party-card-working.party-card-selected,
+.party-card-yourturn.party-card-selected {
+  border-color: var(--gold);
 }
 
 @keyframes party-yourturn-pulse {
   50% {
-    box-shadow: 0 0 2px var(--gold-glow);
+    box-shadow: 0 0 2px rgba(245, 158, 11, 0.3);
   }
 }
 
@@ -631,15 +657,6 @@
 }
 
 /* ── Party Leader ─────────────────────────────────────────────────────────── */
-
-.party-leader-row {
-  padding-top: 0;
-}
-
-.party-recruit {
-  width: 100%;
-  justify-content: center;
-}
 
 .party-badge-leader {
   color: var(--bg-1);
@@ -671,4 +688,157 @@
   color: #fee2e2;
   background: #7f1d1d;
   border-color: #f87171;
+}
+
+/* ── Header view toggle + toolbar ───────────────────────────────────────── */
+
+.party-view {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.party-view-btn {
+  font: inherit;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-3);
+  background: var(--bg-2);
+  border: 1px solid var(--line-3);
+  cursor: pointer;
+}
+
+.party-view-btn + .party-view-btn {
+  border-left: none;
+}
+
+.party-view-on {
+  color: var(--bg-1);
+  background: var(--gold);
+  border-color: var(--gold-hi);
+}
+
+.party-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  padding: 8px 6px 0;
+}
+
+.party-toolbar .party-create {
+  flex: 1 1 auto;
+  width: auto;
+  height: 30px;
+}
+
+.party-toolbar .party-recruit {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 10px;
+}
+
+/* ── Sections: the Leader with its reviewed parties, then the rest ─────── */
+
+.party-section-leader {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 5px;
+  border: 2px solid rgba(255, 217, 122, 0.45);
+  background: linear-gradient(180deg, rgba(255, 217, 122, 0.07), transparent 70%);
+}
+
+.party-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 2px 0;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+}
+
+.party-section-n {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.party-section-empty {
+  padding: 6px;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+/* Opted-in parties hang off the Leader: indented with a guide line. */
+.party-section-kids {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-left: 10px;
+  padding-left: 8px;
+  border-left: 2px dashed rgba(255, 217, 122, 0.35);
+}
+
+/* ── List view: one line per party ─────────────────────────────────────── */
+
+.party-card-compact {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 4px;
+  min-height: 0;
+}
+
+.party-avatar-mini {
+  flex: 0 0 auto;
+}
+
+.party-mini-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--text-0);
+}
+
+.party-card-compact .party-when {
+  flex: 0 0 auto;
+  font-size: var(--fs-2xs);
+}
+
+.party-compact .party-list {
+  gap: 3px;
+}
+
+.party-badge-mini {
+  padding: 1px 3px;
+  letter-spacing: 0;
+}
+
+/* List view: the name always keeps room; pills and time shrink instead. */
+.party-card-compact .party-mini-name {
+  min-width: 7ch;
+}
+
+.party-card-compact .party-pill {
+  font-size: var(--fs-2xs);
+  padding: 0 4px 0 3px;
+  gap: 3px;
+  letter-spacing: 0.04em;
+}
+
+.party-card-compact .party-pill-check {
+  display: none;
+}
+
+/* Indented (reviewed) rows are narrower: the time goes to the tooltip. */
+.party-section-kids .party-card-compact .party-when {
+  display: none;
 }

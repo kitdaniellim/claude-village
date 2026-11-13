@@ -17,6 +17,7 @@ import {
   FALLBACK_CWD,
   LEADER_NAME,
   isLeader,
+  leaderOf,
   NAMELESS,
   activityLine,
   agentCwd,
@@ -768,10 +769,11 @@ export default function TerminalPanel(props: TerminalPanelProps) {
   const queueKey = useRef('');
   useEffect(() => {
     const enabled = new Set(reviewIds);
-    const leader = agents.find((a) => a.alive && isLeader(a)) ?? null;
+    const chosen = leaderOf(agents);
+    const leader = chosen && chosen.alive ? chosen : null;
     // 1. queue finished turns
     for (const a of agents) {
-      if (!enabled.has(a.sessionId) || isLeader(a) || a.isSquire || !a.alive) continue;
+      if (!enabled.has(a.sessionId) || a.sessionId === chosen?.sessionId || a.isSquire || !a.alive) continue;
       const finished = (a.status === 'done' || a.ccStatus === 'idle') && a.status !== 'delegating';
       if (!finished || (reviewedAt.current.get(a.sessionId) ?? 0) >= a.lastEventAt) continue;
       reviewedAt.current.set(a.sessionId, a.lastEventAt);

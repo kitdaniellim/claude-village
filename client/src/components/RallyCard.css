@@ -138,3 +138,38 @@
 .rally-hint {
   color: var(--text-4);
 }
+
+/* Compact one-line header (the list still opens below on ▸). */
+.rally {
+  margin-top: 6px;
+  padding: 4px 6px;
+  gap: 4px;
+}
+
+.rally-row-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rally-row-main .rally-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rally-row-main .rally-go {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 8px;
+}
+
+.rally-row-main .rally-choose {
+  flex: 0 0 auto;
+  height: 24px;
+  width: 26px;
+  padding: 0;
+}
