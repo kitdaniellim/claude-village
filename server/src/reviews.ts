@@ -2,12 +2,29 @@
 // needs-you, with a short note), the client shows it on the worker's party card. Persisted to
 // ~/.rts-agents/reviews.json so a restart keeps the last verdicts.
 
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ReviewVerdict, ReviewsResponse } from './types';
 
 const FILE = path.join(os.homedir(), '.rts-agents', 'reviews.json');
+/** Shared secret the Leader sends with each verdict (X-RTS-Token); 0600, so web pages can't read it. */
+export const TOKEN_FILE = path.join(os.homedir(), '.rts-agents', 'review-token');
+
+/** The review token, created on first use. */
+export function reviewToken(): string {
+  try {
+    const t = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
+    if (/^[a-f0-9]{32,}$/.test(t)) return t;
+  } catch {
+    // not there yet
+  }
+  const t = crypto.randomBytes(24).toString('hex');
+  fs.mkdirSync(path.dirname(TOKEN_FILE), { recursive: true });
+  fs.writeFileSync(TOKEN_FILE, t + '\n', { mode: 0o600 });
+  return t;
+}
 const MAX = 60;
 const VERDICTS = new Set(['approved', 'changes', 'needs-you']);
 
@@ -45,7 +62,14 @@ export class Reviews {
     const v = Reviews.parse(raw);
     if (!v) return null;
     const stamped = { ...v, at: Date.now() };
+    this.byId.delete(v.sessionId); // re-insert so Map order = recency
     this.byId.set(v.sessionId, stamped);
+    // Keep memory at the same cap as the file: drop the oldest.
+    while (this.byId.size > MAX) {
+      const oldest = this.byId.keys().next().value;
+      if (oldest === undefined) break;
+      this.byId.delete(oldest);
+    }
     this.save();
     return stamped;
   }

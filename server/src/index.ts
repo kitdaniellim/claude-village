@@ -1,6 +1,7 @@
 // RTS Agents server entry — env loading, Bun.serve (REST + WebSocket),
 // broadcast throttling, LAN URLs, graceful shutdown. See PROTOCOL.md.
 
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -11,7 +12,7 @@ import { AgentStore } from './state';
 import { Watcher } from './watcher';
 import { LiveSessions } from './sessions';
 import { Rewards } from './rewards';
-import { Reviews } from './reviews';
+import { Reviews, reviewToken } from './reviews';
 import { SquireScanner } from './squires';
 import { Rally } from './rally';
 
@@ -71,6 +72,7 @@ const live = new LiveSessions(
 );
 const rewards = new Rewards();
 const reviews = new Reviews();
+const REVIEW_TOKEN = reviewToken();
 // Reads the last run's roster now, before the first save overwrites it.
 const rally = new Rally(() => store.getAgents());
 
@@ -198,7 +200,19 @@ const server = Bun.serve({
       });
     }
     if (url.pathname === '/api/review' && req.method === 'POST') {
-      // The Party Leader records a verdict (curl from its session); bad bodies get 400.
+      // The Party Leader records a verdict (curl from its session). It must send the token from
+      // ~/.rts-agents/review-token as X-RTS-Token — a web page can neither read it nor send a
+      // custom header cross-origin without a preflight — and a JSON body; bad bodies get 400.
+      const token = req.headers.get('x-rts-token') ?? '';
+      const okToken =
+        token.length === REVIEW_TOKEN.length &&
+        crypto.timingSafeEqual(Buffer.from(token), Buffer.from(REVIEW_TOKEN));
+      if (!okToken || !(req.headers.get('content-type') ?? '').includes('application/json')) {
+        return new Response(JSON.stringify({ ok: false, error: 'forbidden' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+        });
+      }
       return req
         .json()
         .catch(() => null)

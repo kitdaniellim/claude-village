@@ -73,6 +73,7 @@ Always record the verdict for the village (the note is what the user sees on the
 
 ```bash
 curl -s -X POST localhost:4444/api/review -H 'content-type: application/json' \
+  -H "X-RTS-Token: $(cat ~/.rts-agents/review-token)" \
   -d '{"sessionId":"<session>","verdict":"approved|changes|needs-you","note":"<= 200 chars, plain words","round":N}'
 ```
 
