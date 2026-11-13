@@ -774,7 +774,9 @@ export default function TerminalPanel(props: TerminalPanelProps) {
     // 1. queue finished turns
     for (const a of agents) {
       if (!enabled.has(a.sessionId) || a.sessionId === chosen?.sessionId || a.isSquire || !a.alive) continue;
-      const finished = (a.status === 'done' || a.ccStatus === 'idle') && a.status !== 'delegating';
+      // Only a turn that really finished (the server saw turn_done → 'done'). "Idle" alone also covers a
+      // session that was just resumed or interrupted — nothing to review there.
+      const finished = a.status === 'done';
       if (!finished || (reviewedAt.current.get(a.sessionId) ?? 0) >= a.lastEventAt) continue;
       reviewedAt.current.set(a.sessionId, a.lastEventAt);
       if (!reviewQueue.current.includes(a.sessionId)) reviewQueue.current.push(a.sessionId);
@@ -798,8 +800,10 @@ export default function TerminalPanel(props: TerminalPanelProps) {
         const last = verdicts.find((v) => v.sessionId === next);
         const round = last && last.verdict === 'changes' ? last.round + 1 : 1;
         reviewQueue.current.shift();
-        lastDispatch.current = { at: now, sessionId: next };
-        if (worker) {
+        // Still finished? If you've prompted it again meanwhile, skip — that turn gets its own review.
+        const stillDone = !!worker && worker.alive && worker.status === 'done' && worker.ccStatus !== 'busy';
+        if (stillDone) lastDispatch.current = { at: now, sessionId: next };
+        if (worker && stillDone) {
           const payload = JSON.stringify({ name: agentName(worker), session: worker.sessionId, cwd: worker.cwd ?? worker.rootCwd ?? FALLBACK_CWD, round });
           write(`/party-leader review ${payload}`);
           // Submit separately so the slash-command menu has settled on the typed text.
