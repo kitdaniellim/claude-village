@@ -19,7 +19,7 @@ import Village from './components/Village';
 import type { FocusRequest } from './components/Village';
 import TerminalPanel from './components/TerminalPanel';
 import PanelBoundary from './components/PanelBoundary';
-import type { MoveRequest, MoveStatus, PlaceRequest, RallyRequest } from './components/TerminalPanel';
+import type { LeaderState, MoveRequest, MoveStatus, PlaceRequest, RallyRequest } from './components/TerminalPanel';
 import type { RallySession } from './types/agent';
 import type { BlockedMap, SleepingHero } from './utils/terminalTabs';
 import { BLOCKED_MAX, BLOCKED_NOTE_MAX, isBlockedMap } from './utils/terminalTabs';
@@ -141,6 +141,15 @@ export default function App() {
   const leaderAlive = !!leaderOf(agents)?.alive;
   const verdicts = useReviews(reviewIds.length > 0 || leaderAlive);
   const [reviewQueue, setReviewQueue] = useState<string[]>([]);
+  const [leaderState, setLeaderState] = useState<LeaderState>('ok');
+  const [reviewNowRequest, setReviewNowRequest] = useState<FocusRequest | null>(null);
+  const handleReviewQueue = useCallback((ids: string[], state: LeaderState) => {
+    setReviewQueue(ids);
+    setLeaderState(state);
+  }, []);
+  const handleReviewNow = useCallback((sessionId: string) => {
+    setReviewNowRequest((prev) => ({ sessionId, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, []);
   const [leaderRequest, setLeaderRequest] = useState<{ nonce: number } | null>(null);
   const handleToggleReview = useCallback(
     (sessionId: string) =>
@@ -349,6 +358,8 @@ export default function App() {
             reviewIds={reviewIds}
             verdicts={verdicts}
             reviewQueue={reviewQueue}
+            leaderState={leaderState}
+            onReviewNow={handleReviewNow}
             onRecruitLeader={handleRecruitLeader}
           />
         </PanelBoundary>
@@ -427,7 +438,8 @@ export default function App() {
           verdicts={verdicts}
           leaderRequest={leaderRequest}
           onToggleReview={handleToggleReview}
-          onReviewQueue={setReviewQueue}
+          onReviewQueue={handleReviewQueue}
+          reviewNowRequest={reviewNowRequest}
           onActiveChange={handleActiveChange}
         />
       </main>

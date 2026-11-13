@@ -141,8 +141,10 @@ export interface TerminalPanelProps {
   verdicts?: ReviewVerdict[];
   leaderRequest?: { nonce: number } | null;
   onToggleReview?: (sessionId: string) => void;
-  /** Sessions waiting for (or in) a Leader review right now — for the party cards. */
-  onReviewQueue?: (ids: string[]) => void;
+  /** Sessions waiting for (or in) a Leader review right now, and why the Leader isn't taking them. */
+  onReviewQueue?: (ids: string[], leaderState: LeaderState) => void;
+  /** A review badge was clicked: review this party now (no need to wait for a finished turn). */
+  reviewNowRequest?: FocusRequest | null;
 }
 
 const EMPTY_IDS: string[] = [];
@@ -152,6 +154,9 @@ const LEADER_DISPATCH_GAP_MS = 8_000;
 
 /** Past the shell's 3 s close grace (desktop main.ts CLOSE_GRACE_MS) plus exit time. */
 const POP_OUT_DELAY_MS = 4500;
+
+/** Why queued reviews aren't moving: ok, no live Leader, can't type into its terminal, or it's busy. */
+export type LeaderState = 'ok' | 'none' | 'unreachable' | 'busy';
 
 /** Party id for a launch tab whose hero hasn't appeared yet. */
 export const LAUNCH_PREFIX = 'tab:';
@@ -242,6 +247,7 @@ export default function TerminalPanel(props: TerminalPanelProps) {
   const { synced, onHeroAdopted, onSleepers, onRestoreDrawer, rallyRequest, moveRequest, onMoveStatus } = props;
   const { dismissRequest, onActiveChange, blocked = {}, onSetBlocked } = props;
   const { reviewIds = EMPTY_IDS, verdicts = EMPTY_VERDICTS, leaderRequest = null, onToggleReview, onReviewQueue } = props;
+  const { reviewNowRequest = null } = props;
   const cbs = useRef({ onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus, onActiveChange });
   cbs.current = { onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus, onActiveChange };
 
@@ -767,8 +773,21 @@ export default function TerminalPanel(props: TerminalPanelProps) {
   const lastDispatch = useRef<{ at: number; sessionId: string | null }>({ at: 0, sessionId: null });
   const leaderMissingWarned = useRef(false);
   const queueKey = useRef('');
+  const forced = useRef(new Set<string>());
+  const handledReviewNow = useRef<FocusRequest | null>(null);
+  useEffect(() => {
+    if (!reviewNowRequest || handledReviewNow.current === reviewNowRequest) return;
+    handledReviewNow.current = reviewNowRequest;
+    const id = reviewNowRequest.sessionId;
+    const a = agentsRef.current.find((x) => x.sessionId === id);
+    if (a) reviewedAt.current.set(id, a.lastEventAt);
+    forced.current.add(id);
+    reviewQueue.current = [id, ...reviewQueue.current.filter((x) => x !== id)];
+    lastDispatch.current = { at: 0, sessionId: lastDispatch.current.sessionId }; // don't wait for the gap
+  }, [reviewNowRequest]);
   useEffect(() => {
     const enabled = new Set(reviewIds);
+    let leaderState: LeaderState = 'ok';
     const chosen = leaderOf(agents);
     const leader = chosen && chosen.alive ? chosen : null;
     // 1. queue finished turns
@@ -781,7 +800,8 @@ export default function TerminalPanel(props: TerminalPanelProps) {
       reviewedAt.current.set(a.sessionId, a.lastEventAt);
       if (!reviewQueue.current.includes(a.sessionId)) reviewQueue.current.push(a.sessionId);
     }
-    reviewQueue.current = reviewQueue.current.filter((id) => enabled.has(id));
+    reviewQueue.current = reviewQueue.current.filter((id) => enabled.has(id) || forced.current.has(id));
+    if (!leader) leaderState = 'none';
     // 2. dispatch to an idle Leader that runs in a village tab
     const now = Date.now();
     const next = reviewQueue.current[0];
@@ -789,7 +809,12 @@ export default function TerminalPanel(props: TerminalPanelProps) {
       const tab = tabFor(tabsRef.current, leader.sessionId) ?? (leader.pid !== null ? ownTabForPid(leader.pid) : null);
       const write = tab ? writers.current.get(tab.id) : undefined;
       const leaderIdle = leader.ccStatus === 'idle' || (leader.ccStatus === null && (leader.status === 'done' || leader.status === 'idle'));
-      if (!write) {
+      if (!write) leaderState = 'unreachable';
+      else if (!leaderIdle) leaderState = 'busy';
+      if (!write && tab?.restored) {
+        // The Leader's tab is asleep (restored after a restart): wake it so reviews can be typed in.
+        void wakeTab(tab.id, true);
+      } else if (!write) {
         if (!leaderMissingWarned.current) {
           leaderMissingWarned.current = true;
           showToast({ tone: 'warn', text: 'Party Leader is not in the village', hint: 'Reviews wait until its terminal is open here.' });
@@ -800,8 +825,18 @@ export default function TerminalPanel(props: TerminalPanelProps) {
         const last = verdicts.find((v) => v.sessionId === next);
         const round = last && last.verdict === 'changes' ? last.round + 1 : 1;
         reviewQueue.current.shift();
-        // Still finished? If you've prompted it again meanwhile, skip — that turn gets its own review.
-        const stillDone = !!worker && worker.alive && worker.status === 'done' && worker.ccStatus !== 'busy';
+        // Still finished = nothing new since it was queued (same last activity, not busy). The server
+        // turning 'done' into 'idle' after 5 min doesn't count; a new prompt does — that turn gets its own review.
+        const queuedAt = reviewedAt.current.get(next) ?? 0;
+        const stillDone =
+          !!worker &&
+          worker.alive &&
+          worker.ccStatus !== 'busy' &&
+          worker.status !== 'running' &&
+          worker.status !== 'thinking' &&
+          worker.status !== 'delegating' &&
+          (worker.lastEventAt <= queuedAt || forced.current.has(next));
+        forced.current.delete(next);
         if (stillDone) lastDispatch.current = { at: now, sessionId: next };
         if (worker && stillDone) {
           const payload = JSON.stringify({ name: agentName(worker), session: worker.sessionId, cwd: worker.cwd ?? worker.rootCwd ?? FALLBACK_CWD, round });
@@ -817,12 +852,12 @@ export default function TerminalPanel(props: TerminalPanelProps) {
     const answered = sent.sessionId !== null && verdicts.some((v) => v.sessionId === sent.sessionId && v.at >= sent.at);
     const inReview = sent.sessionId && leader && leader.ccStatus !== 'idle' && !answered ? [sent.sessionId] : [];
     const ids = [...new Set([...inReview, ...reviewQueue.current])];
-    const key = ids.join('|');
+    const key = `${ids.join('|')}#${ids.length > 0 ? leaderState : 'ok'}`;
     if (key !== queueKey.current) {
       queueKey.current = key;
-      onReviewQueue?.(ids);
+      onReviewQueue?.(ids, ids.length > 0 ? leaderState : 'ok');
     }
-  }, [agents, reviewIds, verdicts, ownTabForPid, showToast, onReviewQueue]);
+  }, [agents, reviewIds, verdicts, ownTabForPid, showToast, onReviewQueue, wakeTab, tabs, reviewNowRequest]);
 
   const handledMoveRef = useRef<MoveRequest | null>(null);
   useEffect(() => {

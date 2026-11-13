@@ -60,6 +60,10 @@ interface PartyBarProps {
   reviewIds?: string[];
   verdicts?: ReviewVerdict[];
   reviewQueue?: string[];
+  /** Why queued reviews aren't moving (shown on the Leader's card). */
+  leaderState?: 'ok' | 'none' | 'unreachable' | 'busy';
+  /** Click on a review badge: review that party now. */
+  onReviewNow?: (sessionId: string) => void;
   onRecruitLeader?: () => void;
 }
 
@@ -120,7 +124,17 @@ interface CardModel {
 export default function PartyBar(props: PartyBarProps) {
   const { agents, skewMs, selectedSessionId, onSelect, filterRef, onCreateParty, sleepers = [], rally, onRally } = props;
   const { moveStatus = null, onMove, onCancelMove, onRestartApp = null, onDismiss, blocked = {} } = props;
-  const { reviewIds = [], verdicts = [], reviewQueue = [], onRecruitLeader } = props;
+  const { reviewIds = [], verdicts = [], reviewQueue = [], onRecruitLeader, leaderState = 'ok', onReviewNow } = props;
+  const queueNote =
+    reviewQueue.length === 0
+      ? null
+      : leaderState === 'unreachable'
+        ? `⚠ ${reviewQueue.length} queued — can't type into the Leader (open its terminal here)`
+        : leaderState === 'busy'
+          ? `📨 ${reviewQueue.length} queued — Leader busy`
+          : leaderState === 'none'
+            ? `⚠ ${reviewQueue.length} queued — no live Leader`
+            : `📨 ${reviewQueue.length} in review`;
   // Only ever one Leader (live beats ended, then most recent); a sleeping Leader tab counts too.
   const leaderId =
     leaderOf(agents)?.sessionId ?? sleepers.find((s) => s.name.trim().toUpperCase() === LEADER_NAME)?.sessionId ?? null;
@@ -403,8 +417,17 @@ export default function PartyBar(props: PartyBarProps) {
                     👑 Party Leader
                   </span>
                 )}
+                {isTheLeader && queueNote && (
+                  <span className={`party-badge party-badge-queue ${leaderState === 'unreachable' || leaderState === 'none' ? 'party-badge-queue-stuck' : ''}`} title={queueNote}>
+                    {queueNote.split(' — ')[0]}
+                  </span>
+                )}
                 {!isTheLeader && reviewIds.includes(a.sessionId) && (
-                  <ReviewBadge verdict={verdicts.find((v) => v.sessionId === a.sessionId) ?? null} queued={reviewQueue.includes(a.sessionId)} />
+                  <ReviewBadge
+                    verdict={verdicts.find((v) => v.sessionId === a.sessionId) ?? null}
+                    queued={reviewQueue.includes(a.sessionId)}
+                    onReviewNow={onReviewNow ? () => onReviewNow(a.sessionId) : undefined}
+                  />
                 )}
                 {blocked[a.sessionId] && <BlockedBadge mark={blocked[a.sessionId] as BlockedMark} />}
                 {offline && (
@@ -615,7 +638,35 @@ export default function PartyBar(props: PartyBarProps) {
 
 /** Placeholder for a hero whose terminal came back after a restart (or a launch not yet adopted). */
 /** Where an opted-in party stands with the Leader; the note shows on hover. */
-function ReviewBadge({ verdict, queued, mini = false }: { verdict: ReviewVerdict | null; queued: boolean; mini?: boolean }) {
+function ReviewBadge({
+  verdict,
+  queued,
+  mini = false,
+  onReviewNow,
+}: {
+  verdict: ReviewVerdict | null;
+  queued: boolean;
+  mini?: boolean;
+  onReviewNow?: () => void;
+}) {
+  // Clicking the badge (not the card) asks the Leader to review this party right now.
+  const click = onReviewNow
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        onClick: (e: { stopPropagation: () => void }) => {
+          e.stopPropagation();
+          onReviewNow();
+        },
+        onKeyDown: (e: { key: string; preventDefault: () => void; stopPropagation: () => void }) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          e.stopPropagation();
+          onReviewNow();
+        },
+      }
+    : {};
+  const hint = onReviewNow ? ' · click: review now' : '';
   if (mini) {
     const icon = queued ? '👑…' : !verdict ? '👑' : verdict.verdict === 'approved' ? '👑✓' : verdict.verdict === 'changes' ? `👑${verdict.round}` : '👑!';
     const tone = queued || !verdict ? '' : `party-badge-review-${verdict.verdict}`;
@@ -628,14 +679,14 @@ function ReviewBadge({ verdict, queued, mini = false }: { verdict: ReviewVerdict
   }
   if (queued) {
     return (
-      <span className="party-badge party-badge-review" title="Waiting for the Party Leader's review">
+      <span className="party-badge party-badge-review" title={`Waiting for the Party Leader's review${hint}`} {...click}>
         👑 Reviewing…
       </span>
     );
   }
   if (!verdict) {
     return (
-      <span className="party-badge party-badge-review" title="The Party Leader reviews this party when it finishes a turn">
+      <span className="party-badge party-badge-review" title={`The Party Leader reviews this party when it finishes a turn${hint}`} {...click}>
         👑 Review on
       </span>
     );
@@ -643,7 +694,7 @@ function ReviewBadge({ verdict, queued, mini = false }: { verdict: ReviewVerdict
   const label =
     verdict.verdict === 'approved' ? '👑 ✓ Approved' : verdict.verdict === 'changes' ? `👑 Fixing · round ${verdict.round}` : '👑 Needs you';
   return (
-    <span className={`party-badge party-badge-review party-badge-review-${verdict.verdict}`} title={verdict.note || label}>
+    <span className={`party-badge party-badge-review party-badge-review-${verdict.verdict}`} title={`${verdict.note || label}${hint}`} {...click}>
       {label}
     </span>
   );

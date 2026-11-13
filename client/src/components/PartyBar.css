@@ -842,3 +842,20 @@
 .party-section-kids .party-card-compact .party-when {
   display: none;
 }
+
+/* Leader's queue: neutral while moving, red when it can't deliver. */
+.party-badge-queue {
+  color: var(--text-0);
+  background: #1e293b;
+  border-color: #64748b;
+}
+
+.party-badge-queue-stuck {
+  color: #fee2e2;
+  background: #7f1d1d;
+  border-color: #f87171;
+}
+
+.party-badge-review[role='button'] {
+  cursor: pointer;
+}
