@@ -55,7 +55,14 @@ export class Reviews {
     const note = typeof o['note'] === 'string' ? o['note'].replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 400) : '';
     const round = Number.isInteger(o['round']) && (o['round'] as number) >= 0 ? (o['round'] as number) : 0;
     const at = typeof o['at'] === 'number' ? o['at'] : Date.now();
-    return { sessionId, verdict: verdict as ReviewVerdict['verdict'], note, round, at };
+    const replies = Array.isArray(o['replies'])
+      ? (o['replies'] as unknown[])
+          .filter((r): r is string => typeof r === 'string')
+          .map((r) => r.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 80))
+          .filter(Boolean)
+          .slice(0, 4)
+      : [];
+    return { sessionId, verdict: verdict as ReviewVerdict['verdict'], note, round, ...(replies.length ? { replies } : {}), at };
   }
 
   record(raw: unknown): ReviewVerdict | null {

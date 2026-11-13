@@ -197,6 +197,8 @@ export interface ReviewVerdict {
   note: string;
   /** Review round for this worker (1 = first review of the current task). */
   round: number;
+  /** needs-you: the exact replies the worker asked for ("apply it"), offered as one-click buttons. */
+  replies?: string[];
   at: number;
 }
 

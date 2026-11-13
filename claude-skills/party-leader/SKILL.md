@@ -70,8 +70,18 @@ and serves the goal**, answer it — **yes, do it** — including:
 - committing/pushing its finished work, running the checks it skipped.
 
 The user said so on 2026-11-13 ("questions like apply migration or delete old originals were
-obviously trying to get this to LIVE — party leader should've handled this"). This overrides the
-general "never auto-run DB" habit **for delegated sessions only**.
+obviously trying to get this to LIVE — party leader should've handled this").
+
+**But workers won't take your word for risky steps.** Claude Code treats a message from another
+session as *not* the user's approval for prod migrations, permanent deletions, deploys/publishes and
+similar — the worker will reply "another session can't give that on your behalf". So split it:
+- **Safe, routine steps** (finish the code, run checks, fix the bug, commit, push its own work) →
+  message the worker: "yes, do it".
+- **Risky steps the worker asked the user to approve** (it says "Reply 'apply it'", "Reply 'delete
+  originals'", or asks "apply the migration?") → don't message; record **needs-you** with
+  `"replies"` = the exact phrases it asked for (≤ 4, verbatim, e.g. `["apply it","delete originals"]`).
+  The village shows them as one-click buttons on that session; the user's click is the approval.
+  In the summary, mark these `⤴ … — 2 one-click approvals waiting`.
 
 | Verdict | When |
 |---|---|
@@ -100,7 +110,8 @@ Record the verdict — the note is what the user sees on the card, so make it th
 ```bash
 curl -s -X POST localhost:4444/api/review -H 'content-type: application/json' \
   -H "X-RTS-Token: $(cat ~/.rts-agents/review-token)" \
-  -d '{"sessionId":"<session>","verdict":"approved|changes|needs-you","note":"<= 200 chars","round":N}'
+  -d '{"sessionId":"<session>","verdict":"approved|changes|needs-you","note":"<= 200 chars","round":N,"replies":["apply it"]}'
+# "replies" only with needs-you, only phrases the worker itself asked for; omit otherwise.
 ```
 
 ## 4. Output — a summary every time
