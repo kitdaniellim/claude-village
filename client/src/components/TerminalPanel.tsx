@@ -145,6 +145,7 @@ export interface TerminalPanelProps {
   onReviewQueue?: (ids: string[], leaderState: LeaderState) => void;
   /** A review badge was clicked: review this party now (no need to wait for a finished turn). */
   reviewNowRequest?: FocusRequest | null;
+  onReviewNow?: (sessionId: string) => void;
 }
 
 const EMPTY_IDS: string[] = [];
@@ -154,6 +155,14 @@ const LEADER_DISPATCH_GAP_MS = 8_000;
 
 /** Past the shell's 3 s close grace (desktop main.ts CLOSE_GRACE_MS) plus exit time. */
 const POP_OUT_DELAY_MS = 4500;
+
+/** Dispatcher decisions → server log (~/.rts-agents/desktop.log), deduped so a re-render doesn't spam. */
+let lastLeaderLog = '';
+function leaderLog(msg: string): void {
+  if (msg === lastLeaderLog) return;
+  lastLeaderLog = msg;
+  void fetch(`${serverHttpUrl()}/api/leader-log`, { method: 'POST', body: msg }).catch(() => {});
+}
 
 /** Why queued reviews aren't moving: ok, no live Leader, can't type into its terminal, or it's busy. */
 export type LeaderState = 'ok' | 'none' | 'unreachable' | 'busy';
@@ -247,7 +256,7 @@ export default function TerminalPanel(props: TerminalPanelProps) {
   const { synced, onHeroAdopted, onSleepers, onRestoreDrawer, rallyRequest, moveRequest, onMoveStatus } = props;
   const { dismissRequest, onActiveChange, blocked = {}, onSetBlocked } = props;
   const { reviewIds = EMPTY_IDS, verdicts = EMPTY_VERDICTS, leaderRequest = null, onToggleReview, onReviewQueue } = props;
-  const { reviewNowRequest = null } = props;
+  const { reviewNowRequest = null, onReviewNow } = props;
   const cbs = useRef({ onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus, onActiveChange });
   cbs.current = { onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus, onActiveChange };
 
@@ -782,6 +791,7 @@ export default function TerminalPanel(props: TerminalPanelProps) {
     const a = agentsRef.current.find((x) => x.sessionId === id);
     if (a) reviewedAt.current.set(id, a.lastEventAt);
     forced.current.add(id);
+    leaderLog(`review now requested for ${a ? agentName(a) : id}`);
     reviewQueue.current = [id, ...reviewQueue.current.filter((x) => x !== id)];
     lastDispatch.current = { at: 0, sessionId: lastDispatch.current.sessionId }; // don't wait for the gap
   }, [reviewNowRequest]);
@@ -799,6 +809,7 @@ export default function TerminalPanel(props: TerminalPanelProps) {
       if (!finished || (reviewedAt.current.get(a.sessionId) ?? 0) >= a.lastEventAt) continue;
       reviewedAt.current.set(a.sessionId, a.lastEventAt);
       if (!reviewQueue.current.includes(a.sessionId)) reviewQueue.current.push(a.sessionId);
+      leaderLog(`queued ${agentName(a)} (${a.sessionId.slice(0, 8)}) — turn finished`);
     }
     reviewQueue.current = reviewQueue.current.filter((id) => enabled.has(id) || forced.current.has(id));
     if (!leader) leaderState = 'none';
@@ -809,7 +820,10 @@ export default function TerminalPanel(props: TerminalPanelProps) {
       const tab = tabFor(tabsRef.current, leader.sessionId) ?? (leader.pid !== null ? ownTabForPid(leader.pid) : null);
       const write = tab ? writers.current.get(tab.id) : undefined;
       const leaderIdle = leader.ccStatus === 'idle' || (leader.ccStatus === null && (leader.status === 'done' || leader.status === 'idle'));
-      if (!write) leaderState = 'unreachable';
+      if (!write) {
+        leaderState = 'unreachable';
+        leaderLog(`waiting: no terminal writer for the Leader (tab ${tab ? `${tab.id}${tab.restored ? ' asleep' : ''}` : 'not found'}, pid ${leader.pid})`);
+      }
       else if (!leaderIdle) leaderState = 'busy';
       if (!write && tab?.restored) {
         // The Leader's tab is asleep (restored after a restart): wake it so reviews can be typed in.
@@ -838,7 +852,9 @@ export default function TerminalPanel(props: TerminalPanelProps) {
           (worker.lastEventAt <= queuedAt || forced.current.has(next));
         forced.current.delete(next);
         if (stillDone) lastDispatch.current = { at: now, sessionId: next };
+        if (!stillDone) leaderLog(`dropped ${worker ? agentName(worker) : next}: started something new since it was queued`);
         if (worker && stillDone) {
+          leaderLog(`sent ${agentName(worker)} (${worker.sessionId.slice(0, 8)}) to the Leader, round ${round}`);
           const payload = JSON.stringify({ name: agentName(worker), session: worker.sessionId, cwd: worker.cwd ?? worker.rootCwd ?? FALLBACK_CWD, round });
           write(`/party-leader review ${payload}`);
           // Submit separately so the slash-command menu has settled on the typed text.
@@ -1227,19 +1243,33 @@ export default function TerminalPanel(props: TerminalPanelProps) {
             />
           )}
           {active && active.kind === 'resume' && active.sessionId && onToggleReview && !(activeAgent && isLeader(activeAgent)) && (
-            <button
-              type="button"
-              className={`drawer-btn ${reviewIds.includes(active.sessionId) ? 'drawer-btn-review' : ''}`}
-              aria-pressed={reviewIds.includes(active.sessionId)}
-              onClick={() => onToggleReview(active.sessionId as string)}
-              title={
-                reviewIds.includes(active.sessionId)
-                  ? 'The Party Leader reviews this party after every finished turn — click to stop'
-                  : 'Have the Party Leader review this party after every finished turn'
-              }
-            >
-              👑 {reviewIds.includes(active.sessionId) ? 'Reviewed' : 'Review'}
-            </button>
+            <span className="drawer-review">
+              <button
+                type="button"
+                className="drawer-btn drawer-btn-review-now"
+                onClick={() => {
+                  const sid = active.sessionId as string;
+                  if (!reviewIds.includes(sid)) onToggleReview(sid);
+                  onReviewNow?.(sid);
+                }}
+                title="Ask the Party Leader to review this party right now"
+              >
+                👑 Review now
+              </button>
+              <button
+                type="button"
+                className={`drawer-btn drawer-btn-auto ${reviewIds.includes(active.sessionId) ? 'drawer-btn-review' : ''}`}
+                aria-pressed={reviewIds.includes(active.sessionId)}
+                onClick={() => onToggleReview(active.sessionId as string)}
+                title={
+                  reviewIds.includes(active.sessionId)
+                    ? 'Auto-review is ON: the Leader reviews this party after every finished turn — click to turn off'
+                    : 'Auto-review is OFF — click to have the Leader review this party after every finished turn'
+                }
+              >
+                auto {reviewIds.includes(active.sessionId) ? 'on' : 'off'}
+              </button>
+            </span>
           )}
           {active && (
             <button

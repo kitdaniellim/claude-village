@@ -440,6 +440,7 @@ export default function App() {
           onToggleReview={handleToggleReview}
           onReviewQueue={handleReviewQueue}
           reviewNowRequest={reviewNowRequest}
+          onReviewNow={handleReviewNow}
           onActiveChange={handleActiveChange}
         />
       </main>

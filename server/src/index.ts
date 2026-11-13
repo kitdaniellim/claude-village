@@ -73,6 +73,8 @@ const live = new LiveSessions(
 const rewards = new Rewards();
 const reviews = new Reviews();
 const REVIEW_TOKEN = reviewToken();
+/** Party Leader dispatcher decisions, reported by the village page. */
+const LEADER_LOG = path.join(os.homedir(), '.rts-agents', 'leader.log');
 // Reads the last run's roster now, before the first save overwrites it.
 const rally = new Rally(() => store.getAgents());
 
@@ -191,6 +193,22 @@ const server = Bun.serve({
       return new Response(JSON.stringify(body), {
         status: 200,
         headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      });
+    }
+    if (url.pathname === '/api/leader-log' && req.method === 'POST') {
+      // The village's review dispatcher reports its decisions here, so a stuck review can be
+      // diagnosed from ~/.rts-agents/desktop.log. Plain text, capped, control chars stripped.
+      return req.text().then((t) => {
+        const line = `${new Date().toISOString()} ${t.replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 400)}\n`;
+        try {
+          // Its own file: the server's stdout isn't always captured (it can outlive the app that started it).
+          fs.mkdirSync(path.dirname(LEADER_LOG), { recursive: true });
+          if ((fs.statSync(LEADER_LOG, { throwIfNoEntry: false })?.size ?? 0) > 512 * 1024) fs.renameSync(LEADER_LOG, LEADER_LOG + '.1');
+          fs.appendFileSync(LEADER_LOG, line);
+        } catch {
+          // logging must never break the server
+        }
+        return new Response(null, { status: 204, headers: CORS_HEADERS });
       });
     }
     if (url.pathname === '/api/reviews') {

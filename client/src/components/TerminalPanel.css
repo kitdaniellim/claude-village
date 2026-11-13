@@ -1359,3 +1359,14 @@
   background: var(--gold);
   border-color: var(--gold-hi);
 }
+
+/* Review now + auto on/off read as one control. */
+.drawer-review {
+  display: inline-flex;
+}
+
+.drawer-review .drawer-btn-auto {
+  margin-left: -2px;
+  font-size: var(--fs-xs);
+  padding: 6px 7px;
+}
