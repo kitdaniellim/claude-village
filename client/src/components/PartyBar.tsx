@@ -125,6 +125,11 @@ export default function PartyBar(props: PartyBarProps) {
   const { agents, skewMs, selectedSessionId, onSelect, filterRef, onCreateParty, sleepers = [], rally, onRally } = props;
   const { moveStatus = null, onMove, onCancelMove, onRestartApp = null, onDismiss, blocked = {} } = props;
   const { reviewIds = [], verdicts = [], reviewQueue = [], onRecruitLeader, leaderState = 'ok', onReviewNow } = props;
+  // Sessions the Leader manages that are waiting on the user — shown on the Leader's card.
+  const needsYou = verdicts.filter((v) => v.verdict === 'needs-you' && reviewIds.includes(v.sessionId));
+  const needsYouTip = needsYou
+    .map((v) => `${agents.find((a) => a.sessionId === v.sessionId)?.customTitle ?? v.sessionId.slice(0, 8)}: ${v.note || 'needs you'}`)
+    .join('\n');
   const queueNote =
     reviewQueue.length === 0
       ? null
@@ -337,6 +342,11 @@ export default function PartyBar(props: PartyBarProps) {
             {name}
           </span>
           {mark && <BlockedBadge mark={mark} mini />}
+          {isTheLeader && needsYou.length > 0 && (
+            <span className="party-badge party-badge-review-needs-you party-badge-mini" title={needsYouTip}>
+              ⚠{needsYou.length}
+            </span>
+          )}
           {!isTheLeader && reviewIds.includes(a.sessionId) && (
             <ReviewBadge verdict={verdicts.find((v) => v.sessionId === a.sessionId) ?? null} queued={reviewQueue.includes(a.sessionId)} mini />
           )}
@@ -415,6 +425,11 @@ export default function PartyBar(props: PartyBarProps) {
                 {isTheLeader && (
                   <span className="party-badge party-badge-leader" title="Party Leader — reviews opted-in parties when they finish a turn">
                     👑 Party Leader
+                  </span>
+                )}
+                {isTheLeader && needsYou.length > 0 && (
+                  <span className="party-badge party-badge-review-needs-you" title={needsYouTip}>
+                    ⚠ Needs you{needsYou.length > 1 ? ` · ${needsYou.length}` : ''}
                   </span>
                 )}
                 {isTheLeader && queueNote && (
@@ -615,7 +630,7 @@ export default function PartyBar(props: PartyBarProps) {
                 <section className="party-section party-section-leader" aria-label="Party Leader and reviewed parties">
                   <div className="party-section-head">
                     <span>👑 Party Leader</span>
-                    {reviewed.length > 0 && <span className="party-section-n">{reviewed.length} reviewed</span>}
+                    {reviewed.length > 0 && <span className="party-section-n">{reviewed.length} delegated</span>}
                   </div>
                   {leaderSlot ? renderSlot(leaderSlot) : <div className="party-section-empty">No leader yet — 👑 Recruit above.</div>}
                   {reviewed.length > 0 && <div className="party-section-kids">{reviewed.map(renderSlot)}</div>}
@@ -668,8 +683,8 @@ function ReviewBadge({
     : {};
   const hint = onReviewNow ? ' · click: review now' : '';
   if (mini) {
-    const icon = queued ? '👑…' : !verdict ? '👑' : verdict.verdict === 'approved' ? '👑✓' : verdict.verdict === 'changes' ? `👑${verdict.round}` : '👑!';
-    const tone = queued || !verdict ? '' : `party-badge-review-${verdict.verdict}`;
+    const icon = queued ? '👑…' : !verdict ? '👑' : verdict.verdict === 'approved' ? '👑✓' : verdict.verdict === 'changes' ? `👑${verdict.round}` : '👑';
+    const tone = queued || !verdict || verdict.verdict === 'needs-you' ? '' : `party-badge-review-${verdict.verdict}`;
     const tip = queued ? 'Waiting for the Party Leader' : verdict ? verdict.note || verdict.verdict : 'Reviewed by the Party Leader';
     return (
       <span className={`party-badge party-badge-review party-badge-mini ${tone}`} title={tip}>
@@ -686,15 +701,17 @@ function ReviewBadge({
   }
   if (!verdict) {
     return (
-      <span className="party-badge party-badge-review" title={`The Party Leader reviews this party when it finishes a turn${hint}`} {...click}>
-        👑 Review on
+      <span className="party-badge party-badge-review" title={`Delegated to the Party Leader — checked after every finished turn${hint}`} {...click}>
+        👑 Delegated
       </span>
     );
   }
+  // "Needs you" is shown on the Leader's card (it manages this session); here it stays "Delegated".
   const label =
-    verdict.verdict === 'approved' ? '👑 ✓ Approved' : verdict.verdict === 'changes' ? `👑 Fixing · round ${verdict.round}` : '👑 Needs you';
+    verdict.verdict === 'approved' ? '👑 ✓ Approved' : verdict.verdict === 'changes' ? `👑 Fixing · round ${verdict.round}` : '👑 Delegated';
+  const tone = verdict.verdict === 'needs-you' ? '' : `party-badge-review-${verdict.verdict}`;
   return (
-    <span className={`party-badge party-badge-review party-badge-review-${verdict.verdict}`} title={`${verdict.note || label}${hint}`} {...click}>
+    <span className={`party-badge party-badge-review ${tone}`} title={`${verdict.note || label}${hint}`} {...click}>
       {label}
     </span>
   );

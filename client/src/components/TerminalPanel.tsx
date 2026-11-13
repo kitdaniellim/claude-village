@@ -779,7 +779,7 @@ export default function TerminalPanel(props: TerminalPanelProps) {
   // queue is typed into the Leader's terminal one at a time, whenever the Leader is idle.
   const reviewQueue = useRef<string[]>([]);
   const reviewedAt = useRef(new Map<string, number>());
-  const lastDispatch = useRef<{ at: number; sessionId: string | null }>({ at: 0, sessionId: null });
+  const lastDispatch = useRef<{ at: number; ids: string[] }>({ at: 0, ids: [] });
   const leaderMissingWarned = useRef(false);
   const queueKey = useRef('');
   const forced = useRef(new Set<string>());
@@ -793,7 +793,7 @@ export default function TerminalPanel(props: TerminalPanelProps) {
     forced.current.add(id);
     leaderLog(`review now requested for ${a ? agentName(a) : id}`);
     reviewQueue.current = [id, ...reviewQueue.current.filter((x) => x !== id)];
-    lastDispatch.current = { at: 0, sessionId: lastDispatch.current.sessionId }; // don't wait for the gap
+    lastDispatch.current = { at: 0, ids: lastDispatch.current.ids }; // don't wait for the gap
   }, [reviewNowRequest]);
   useEffect(() => {
     const enabled = new Set(reviewIds);
@@ -835,27 +835,40 @@ export default function TerminalPanel(props: TerminalPanelProps) {
         }
       } else if (leaderIdle && now - lastDispatch.current.at > LEADER_DISPATCH_GAP_MS) {
         leaderMissingWarned.current = false;
-        const worker = agents.find((a) => a.sessionId === next);
-        const last = verdicts.find((v) => v.sessionId === next);
-        const round = last && last.verdict === 'changes' ? last.round + 1 : 1;
-        reviewQueue.current.shift();
-        // Still finished = nothing new since it was queued (same last activity, not busy). The server
-        // turning 'done' into 'idle' after 5 min doesn't count; a new prompt does — that turn gets its own review.
-        const queuedAt = reviewedAt.current.get(next) ?? 0;
-        const stillDone =
-          !!worker &&
-          worker.alive &&
-          worker.ccStatus !== 'busy' &&
-          worker.status !== 'running' &&
-          worker.status !== 'thinking' &&
-          worker.status !== 'delegating' &&
-          (worker.lastEventAt <= queuedAt || forced.current.has(next));
-        forced.current.delete(next);
-        if (stillDone) lastDispatch.current = { at: now, sessionId: next };
-        if (!stillDone) leaderLog(`dropped ${worker ? agentName(worker) : next}: started something new since it was queued`);
-        if (worker && stillDone) {
-          leaderLog(`sent ${agentName(worker)} (${worker.sessionId.slice(0, 8)}) to the Leader, round ${round}`);
-          const payload = JSON.stringify({ name: agentName(worker), session: worker.sessionId, cwd: worker.cwd ?? worker.rootCwd ?? FALLBACK_CWD, round });
+        // Everything waiting goes in one request: several finished sessions → one Leader turn
+        // (it fans them out to sub-agents and answers with one summary).
+        const items: { name: string; session: string; cwd: string; round: number }[] = [];
+        for (const id of reviewQueue.current) {
+          const worker = agents.find((a) => a.sessionId === id);
+          // Still finished = nothing new since it was queued (same last activity, not busy). The
+          // server turning 'done' into 'idle' after 5 min doesn't count; a new prompt does.
+          const queuedAt = reviewedAt.current.get(id) ?? 0;
+          const stillDone =
+            !!worker &&
+            worker.alive &&
+            worker.ccStatus !== 'busy' &&
+            worker.status !== 'running' &&
+            worker.status !== 'thinking' &&
+            worker.status !== 'delegating' &&
+            (worker.lastEventAt <= queuedAt || forced.current.has(id));
+          forced.current.delete(id);
+          if (!worker || !stillDone) {
+            leaderLog(`dropped ${worker ? agentName(worker) : id}: started something new since it was queued`);
+            continue;
+          }
+          const last = verdicts.find((v) => v.sessionId === id);
+          items.push({
+            name: agentName(worker),
+            session: worker.sessionId,
+            cwd: worker.cwd ?? worker.rootCwd ?? FALLBACK_CWD,
+            round: last && last.verdict === 'changes' ? last.round + 1 : 1,
+          });
+        }
+        reviewQueue.current = [];
+        if (items.length > 0) {
+          lastDispatch.current = { at: now, ids: items.map((x) => x.session) };
+          const payload = JSON.stringify(items.length === 1 ? items[0] : items);
+          leaderLog(`sent ${items.map((x) => `${x.name} r${x.round}`).join(', ')} to the Leader`);
           write(`/party-leader review ${payload}`);
           // Submit separately so the slash-command menu has settled on the typed text.
           window.setTimeout(() => write('\r'), 400);
@@ -865,8 +878,10 @@ export default function TerminalPanel(props: TerminalPanelProps) {
     // 3. tell the party which cards are waiting / in review
     // In review = dispatched, Leader still busy, and no verdict recorded since the dispatch.
     const sent = lastDispatch.current;
-    const answered = sent.sessionId !== null && verdicts.some((v) => v.sessionId === sent.sessionId && v.at >= sent.at);
-    const inReview = sent.sessionId && leader && leader.ccStatus !== 'idle' && !answered ? [sent.sessionId] : [];
+    const inReview =
+      leader && leader.ccStatus !== 'idle'
+        ? sent.ids.filter((id) => !verdicts.some((v) => v.sessionId === id && v.at >= sent.at))
+        : [];
     const ids = [...new Set([...inReview, ...reviewQueue.current])];
     const key = `${ids.join('|')}#${ids.length > 0 ? leaderState : 'ok'}`;
     if (key !== queueKey.current) {
@@ -1243,33 +1258,27 @@ export default function TerminalPanel(props: TerminalPanelProps) {
             />
           )}
           {active && active.kind === 'resume' && active.sessionId && onToggleReview && !(activeAgent && isLeader(activeAgent)) && (
-            <span className="drawer-review">
-              <button
-                type="button"
-                className="drawer-btn drawer-btn-review-now"
-                onClick={() => {
-                  const sid = active.sessionId as string;
-                  if (!reviewIds.includes(sid)) onToggleReview(sid);
-                  onReviewNow?.(sid);
-                }}
-                title="Ask the Party Leader to review this party right now"
-              >
-                👑 Review now
-              </button>
-              <button
-                type="button"
-                className={`drawer-btn drawer-btn-auto ${reviewIds.includes(active.sessionId) ? 'drawer-btn-review' : ''}`}
-                aria-pressed={reviewIds.includes(active.sessionId)}
-                onClick={() => onToggleReview(active.sessionId as string)}
-                title={
-                  reviewIds.includes(active.sessionId)
-                    ? 'Auto-review is ON: the Leader reviews this party after every finished turn — click to turn off'
-                    : 'Auto-review is OFF — click to have the Leader review this party after every finished turn'
+            <button
+              type="button"
+              className={`drawer-btn ${reviewIds.includes(active.sessionId) ? 'drawer-btn-review' : ''}`}
+              aria-pressed={reviewIds.includes(active.sessionId)}
+              onClick={() => {
+                const sid = active.sessionId as string;
+                if (reviewIds.includes(sid)) {
+                  onToggleReview(sid); // stop monitoring
+                } else {
+                  onToggleReview(sid); // hand it to the Leader…
+                  onReviewNow?.(sid); // …and have it looked at right away
                 }
-              >
-                auto {reviewIds.includes(active.sessionId) ? 'on' : 'off'}
-              </button>
-            </span>
+              }}
+              title={
+                reviewIds.includes(active.sessionId)
+                  ? 'Delegated: the Party Leader checks this session after every finished turn — click to take it back'
+                  : 'Delegate to the Party Leader: it checks this session now and after every finished turn'
+              }
+            >
+              👑 {reviewIds.includes(active.sessionId) ? 'Delegated' : 'Delegate'}
+            </button>
           )}
           {active && (
             <button

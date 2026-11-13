@@ -192,10 +192,12 @@ command again.
 One session named **PARTY LEADER** oversees all your other Claude Code sessions.
 
 - **👑 Recruit Party Leader** (under Create Party) starts it.
-- **👑 Review** in any party's drawer bar opts that party in: whenever it finishes a turn, the
-  village types `/party-leader review {…}` into the Leader, which checks the work and either
-  approves, messages the worker with fixes (they iterate until approved), or flags you.
-  Verdicts show on the party card (hover for the note) and live in `~/.rts-agents/reviews.json`.
+- **👑 Delegate** in a party's drawer bar hands it to the Leader (checked right away, then after
+  every finished turn; **👑 Delegated** = click to take it back). Finished turns are typed into the
+  Leader as `/party-leader review {…}` — several at once go in one batch, which the Leader fans out
+  to sub-agents. It approves, sends the worker back to finish (they iterate), or flags you, and
+  ends every call with a one-line-per-session summary. **⚠ Needs you** shows on the Leader's card;
+  verdicts live in `~/.rts-agents/reviews.json`, dispatcher decisions in `~/.rts-agents/leader.log`.
 - Talk to the Leader directly for status, "tell X to …", "check on X", or a daily round-up.
 
 The Leader's playbook is the `party-leader` skill. Install it once per machine:
