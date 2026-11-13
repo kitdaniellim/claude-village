@@ -239,3 +239,18 @@ export const RALLY_WINDOW_MS = 3 * 60 * 60_000;
 export const RALLY_HEARTBEAT_MS = 30_000;
 /** Rally: roster entries older than this are forgotten. */
 export const RALLY_KEEP_MS = 7 * 24 * 60 * 60_000;
+
+/** A Party Leader's verdict on a worker session (POST /api/review, GET /api/reviews). */
+export interface ReviewVerdict {
+  sessionId: string;
+  verdict: 'approved' | 'changes' | 'needs-you';
+  /** Short note: what to fix, why it's approved, or what the human must decide. */
+  note: string;
+  /** Review round for this worker (1 = first review of the current task). */
+  round: number;
+  at: number;
+}
+
+export interface ReviewsResponse {
+  verdicts: ReviewVerdict[];
+}

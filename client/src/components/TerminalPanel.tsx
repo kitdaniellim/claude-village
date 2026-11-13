@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import type { AgentState, NamesResponse, RallySession } from '../types/agent';
+import type { AgentState, NamesResponse, RallySession, ReviewVerdict } from '../types/agent';
 import { serverHttpUrl } from '../hooks/useAgentSocket';
 import type { DesktopBridge, FocusSessionResult } from '../types/desktop';
 import type { FocusRequest } from './Village';
@@ -15,6 +15,8 @@ import type { PlaceDef, RepoDef } from '../world/registry';
 import { heroColor } from '../utils/spriteMapper';
 import {
   FALLBACK_CWD,
+  LEADER_NAME,
+  isLeader,
   NAMELESS,
   activityLine,
   agentCwd,
@@ -133,7 +135,19 @@ export interface TerminalPanelProps {
   /** Blocked labels (UI only), and setting/clearing one (null note = unblock). */
   blocked?: BlockedMap;
   onSetBlocked?: (sessionId: string, note: string | null) => void;
+  /** Party Leader: sessions opted in to review, the Leader's latest verdicts, and "recruit" clicks. */
+  reviewIds?: string[];
+  verdicts?: ReviewVerdict[];
+  leaderRequest?: { nonce: number } | null;
+  onToggleReview?: (sessionId: string) => void;
+  /** Sessions waiting for (or in) a Leader review right now — for the party cards. */
+  onReviewQueue?: (ids: string[]) => void;
 }
+
+const EMPTY_IDS: string[] = [];
+const EMPTY_VERDICTS: ReviewVerdict[] = [];
+/** Don't type a new review into the Leader until it has had time to pick up the last one. */
+const LEADER_DISPATCH_GAP_MS = 8_000;
 
 /** Past the shell's 3 s close grace (desktop main.ts CLOSE_GRACE_MS) plus exit time. */
 const POP_OUT_DELAY_MS = 4500;
@@ -226,6 +240,7 @@ export default function TerminalPanel(props: TerminalPanelProps) {
   const { open, width, onWidthChange, onClose, bridge, agents, sessionRequest, placeRequest, focusMode, onToggleFocus } = props;
   const { synced, onHeroAdopted, onSleepers, onRestoreDrawer, rallyRequest, moveRequest, onMoveStatus } = props;
   const { dismissRequest, onActiveChange, blocked = {}, onSetBlocked } = props;
+  const { reviewIds = EMPTY_IDS, verdicts = EMPTY_VERDICTS, leaderRequest = null, onToggleReview, onReviewQueue } = props;
   const cbs = useRef({ onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus, onActiveChange });
   cbs.current = { onHeroAdopted, onSleepers, onRestoreDrawer, onMoveStatus, onActiveChange };
 
@@ -734,6 +749,75 @@ export default function TerminalPanel(props: TerminalPanelProps) {
       );
   }, [dismissRequest, cardId, bridge, closeTab, showToast]);
 
+  // ── Party Leader ───────────────────────────────────────────────────────────
+  // "Recruit": a fresh session named PARTY LEADER in the coding root.
+  const writers = useRef(new Map<string, (data: string) => void>());
+  const handledLeaderReq = useRef<{ nonce: number } | null>(null);
+  useEffect(() => {
+    if (!leaderRequest || handledLeaderReq.current === leaderRequest) return;
+    handledLeaderReq.current = leaderRequest;
+    addTab({ kind: 'new', sessionId: null, name: LEADER_NAME, shortId: null, cwd: FALLBACK_CWD, color: NEUTRAL_TAB, squire: false, elsewherePid: null });
+  }, [leaderRequest, addTab]);
+
+  // Review queue: an opted-in party that finishes a turn is queued once per finished turn; the
+  // queue is typed into the Leader's terminal one at a time, whenever the Leader is idle.
+  const reviewQueue = useRef<string[]>([]);
+  const reviewedAt = useRef(new Map<string, number>());
+  const lastDispatch = useRef<{ at: number; sessionId: string | null }>({ at: 0, sessionId: null });
+  const leaderMissingWarned = useRef(false);
+  const queueKey = useRef('');
+  useEffect(() => {
+    const enabled = new Set(reviewIds);
+    const leader = agents.find((a) => a.alive && isLeader(a)) ?? null;
+    // 1. queue finished turns
+    for (const a of agents) {
+      if (!enabled.has(a.sessionId) || isLeader(a) || a.isSquire || !a.alive) continue;
+      const finished = (a.status === 'done' || a.ccStatus === 'idle') && a.status !== 'delegating';
+      if (!finished || (reviewedAt.current.get(a.sessionId) ?? 0) >= a.lastEventAt) continue;
+      reviewedAt.current.set(a.sessionId, a.lastEventAt);
+      if (!reviewQueue.current.includes(a.sessionId)) reviewQueue.current.push(a.sessionId);
+    }
+    reviewQueue.current = reviewQueue.current.filter((id) => enabled.has(id));
+    // 2. dispatch to an idle Leader that runs in a village tab
+    const now = Date.now();
+    const next = reviewQueue.current[0];
+    if (next && leader) {
+      const tab = tabFor(tabsRef.current, leader.sessionId) ?? (leader.pid !== null ? ownTabForPid(leader.pid) : null);
+      const write = tab ? writers.current.get(tab.id) : undefined;
+      const leaderIdle = leader.ccStatus === 'idle' || (leader.ccStatus === null && (leader.status === 'done' || leader.status === 'idle'));
+      if (!write) {
+        if (!leaderMissingWarned.current) {
+          leaderMissingWarned.current = true;
+          showToast({ tone: 'warn', text: 'Party Leader is not in the village', hint: 'Reviews wait until its terminal is open here.' });
+        }
+      } else if (leaderIdle && now - lastDispatch.current.at > LEADER_DISPATCH_GAP_MS) {
+        leaderMissingWarned.current = false;
+        const worker = agents.find((a) => a.sessionId === next);
+        const last = verdicts.find((v) => v.sessionId === next);
+        const round = last && last.verdict === 'changes' ? last.round + 1 : 1;
+        reviewQueue.current.shift();
+        lastDispatch.current = { at: now, sessionId: next };
+        if (worker) {
+          const payload = JSON.stringify({ name: agentName(worker), session: worker.sessionId, cwd: worker.cwd ?? worker.rootCwd ?? FALLBACK_CWD, round });
+          write(`/party-leader review ${payload}`);
+          // Submit separately so the slash-command menu has settled on the typed text.
+          window.setTimeout(() => write('\r'), 400);
+        }
+      }
+    }
+    // 3. tell the party which cards are waiting / in review
+    // In review = dispatched, Leader still busy, and no verdict recorded since the dispatch.
+    const sent = lastDispatch.current;
+    const answered = sent.sessionId !== null && verdicts.some((v) => v.sessionId === sent.sessionId && v.at >= sent.at);
+    const inReview = sent.sessionId && leader && leader.ccStatus !== 'idle' && !answered ? [sent.sessionId] : [];
+    const ids = [...new Set([...inReview, ...reviewQueue.current])];
+    const key = ids.join('|');
+    if (key !== queueKey.current) {
+      queueKey.current = key;
+      onReviewQueue?.(ids);
+    }
+  }, [agents, reviewIds, verdicts, ownTabForPid, showToast, onReviewQueue]);
+
   const handledMoveRef = useRef<MoveRequest | null>(null);
   useEffect(() => {
     if (!moveRequest || handledMoveRef.current === moveRequest) return;
@@ -1101,6 +1185,21 @@ export default function TerminalPanel(props: TerminalPanelProps) {
               onSave={(note) => onSetBlocked(active.sessionId as string, note)}
             />
           )}
+          {active && active.kind === 'resume' && active.sessionId && onToggleReview && !(activeAgent && isLeader(activeAgent)) && (
+            <button
+              type="button"
+              className={`drawer-btn ${reviewIds.includes(active.sessionId) ? 'drawer-btn-review' : ''}`}
+              aria-pressed={reviewIds.includes(active.sessionId)}
+              onClick={() => onToggleReview(active.sessionId as string)}
+              title={
+                reviewIds.includes(active.sessionId)
+                  ? 'The Party Leader reviews this party after every finished turn — click to stop'
+                  : 'Have the Party Leader review this party after every finished turn'
+              }
+            >
+              👑 {reviewIds.includes(active.sessionId) ? 'Reviewed' : 'Review'}
+            </button>
+          )}
           {active && (
             <button
               type="button"
@@ -1192,6 +1291,10 @@ export default function TerminalPanel(props: TerminalPanelProps) {
                 tab={t}
                 active={isActive && open}
                 onPid={(pid) => setTabPid(t.id, pid)}
+                onWriter={(w) => {
+                  if (w) writers.current.set(t.id, w);
+                  else writers.current.delete(t.id);
+                }}
                 onMissing={() => markMissing(t.id)}
                 onClose={() => closeTab(t.id)}
               />

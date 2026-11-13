@@ -11,6 +11,7 @@ import { AgentStore } from './state';
 import { Watcher } from './watcher';
 import { LiveSessions } from './sessions';
 import { Rewards } from './rewards';
+import { Reviews } from './reviews';
 import { SquireScanner } from './squires';
 import { Rally } from './rally';
 
@@ -69,6 +70,7 @@ const live = new LiveSessions(
   }
 );
 const rewards = new Rewards();
+const reviews = new Reviews();
 // Reads the last run's roster now, before the first save overwrites it.
 const rally = new Rally(() => store.getAgents());
 
@@ -141,7 +143,7 @@ function snapshotMessage(): ServerMessage {
 const server = Bun.serve({
   port: PORT,
   hostname: LAN ? '0.0.0.0' : 'localhost',
-  fetch(req, srv): Response | undefined {
+  fetch(req, srv): Response | Promise<Response> | undefined {
     const url = new URL(req.url);
 
     if (url.pathname === '/ws') {
@@ -188,6 +190,25 @@ const server = Bun.serve({
         status: 200,
         headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
       });
+    }
+    if (url.pathname === '/api/reviews') {
+      return new Response(JSON.stringify(reviews.getState()), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      });
+    }
+    if (url.pathname === '/api/review' && req.method === 'POST') {
+      // The Party Leader records a verdict (curl from its session); bad bodies get 400.
+      return req
+        .json()
+        .catch(() => null)
+        .then((body) => {
+          const saved = reviews.record(body);
+          return new Response(JSON.stringify(saved ? { ok: true, verdict: saved } : { ok: false, error: 'bad verdict' }), {
+            status: saved ? 200 : 400,
+            headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+          });
+        });
     }
     if (url.pathname === '/api/rewards') {
       return new Response(JSON.stringify(rewards.getState()), {

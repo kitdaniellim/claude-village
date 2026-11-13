@@ -1352,3 +1352,10 @@
 .drawer-blocked-spacer {
   flex: 1;
 }
+
+.drawer-btn-review,
+.drawer-btn-review:hover {
+  color: var(--bg-1);
+  background: var(--gold);
+  border-color: var(--gold-hi);
+}

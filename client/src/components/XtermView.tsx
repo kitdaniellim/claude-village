@@ -21,6 +21,8 @@ export interface XtermViewProps {
   active: boolean;
   /** The spawned process pid (null once it exits) — lets the drawer recognise its own sessions. */
   onPid?: (pid: number | null) => void;
+  /** Hands the drawer a way to type into this terminal (null once the process ends). */
+  onWriter?: (write: ((data: string) => void) | null) => void;
   /** Resume failed because the transcript is missing; the drawer swaps in a parchment. */
   onMissing?: () => void;
   /** "Close" on the ended overlay — the drawer drops this tab. */
@@ -68,7 +70,7 @@ function plainCtrl(e: KeyboardEvent, code: string): boolean {
   return e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.code === code;
 }
 
-export default function XtermView({ bridge, tab, active, onPid, onMissing, onClose }: XtermViewProps) {
+export default function XtermView({ bridge, tab, active, onPid, onMissing, onClose, onWriter }: XtermViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<(() => void) | null>(null);
@@ -80,8 +82,8 @@ export default function XtermView({ bridge, tab, active, onPid, onMissing, onClo
   // the live process, while a later Restart resumes that hero instead of launching anew.
   const tabRef = useRef(tab);
   tabRef.current = tab;
-  const cbRef = useRef({ onPid, onMissing });
-  cbRef.current = { onPid, onMissing };
+  const cbRef = useRef({ onPid, onMissing, onWriter });
+  cbRef.current = { onPid, onMissing, onWriter };
 
   // Terminal lifecycle — once per mount.
   useEffect(() => {
@@ -242,6 +244,8 @@ export default function XtermView({ bridge, tab, active, onPid, onMissing, onClo
           id = h.id;
           ptyIdRef.current = h.id;
           cbRef.current.onPid?.(typeof h.pid === 'number' ? h.pid : null);
+          const ptyId = h.id;
+          cbRef.current.onWriter?.((data) => bridge.pty.write(ptyId, data));
           if (typeof h.replay === 'string') {
             // Reattached: repaint what the screen showed, and skip the startup missing-history watch.
             term.reset();
@@ -265,6 +269,7 @@ export default function XtermView({ bridge, tab, active, onPid, onMissing, onClo
             id = null;
             ptyIdRef.current = null;
             cbRef.current.onPid?.(null);
+            cbRef.current.onWriter?.(null);
             term.blur();
             setExitCode(code);
           });
@@ -287,6 +292,7 @@ export default function XtermView({ bridge, tab, active, onPid, onMissing, onClo
       if (id) bridge.pty.close(id);
       ptyIdRef.current = null;
       cbRef.current.onPid?.(null);
+      cbRef.current.onWriter?.(null);
     };
   }, [bridge, generation]);
 

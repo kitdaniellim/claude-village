@@ -1,0 +1,67 @@
+// Party Leader review verdicts: the Leader session POSTs one per review (approved / changes /
+// needs-you, with a short note), the client shows it on the worker's party card. Persisted to
+// ~/.rts-agents/reviews.json so a restart keeps the last verdicts.
+
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import type { ReviewVerdict, ReviewsResponse } from './types';
+
+const FILE = path.join(os.homedir(), '.rts-agents', 'reviews.json');
+const MAX = 60;
+const VERDICTS = new Set(['approved', 'changes', 'needs-you']);
+
+export class Reviews {
+  private byId = new Map<string, ReviewVerdict>();
+
+  constructor() {
+    try {
+      const raw = JSON.parse(fs.readFileSync(FILE, 'utf8')) as { verdicts?: unknown };
+      if (Array.isArray(raw.verdicts)) {
+        for (const v of raw.verdicts) {
+          const ok = Reviews.parse(v);
+          if (ok) this.byId.set(ok.sessionId, ok);
+        }
+      }
+    } catch {
+      // first run / unreadable — start empty
+    }
+  }
+
+  /** Validate an untrusted body; null when it isn't a verdict. */
+  static parse(v: unknown): ReviewVerdict | null {
+    if (!v || typeof v !== 'object') return null;
+    const o = v as Record<string, unknown>;
+    const sessionId = typeof o['sessionId'] === 'string' ? o['sessionId'] : '';
+    const verdict = typeof o['verdict'] === 'string' ? o['verdict'] : '';
+    if (!/^[\w-]{8,64}$/.test(sessionId) || !VERDICTS.has(verdict)) return null;
+    const note = typeof o['note'] === 'string' ? o['note'].replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 400) : '';
+    const round = Number.isInteger(o['round']) && (o['round'] as number) >= 0 ? (o['round'] as number) : 0;
+    const at = typeof o['at'] === 'number' ? o['at'] : Date.now();
+    return { sessionId, verdict: verdict as ReviewVerdict['verdict'], note, round, at };
+  }
+
+  record(raw: unknown): ReviewVerdict | null {
+    const v = Reviews.parse(raw);
+    if (!v) return null;
+    const stamped = { ...v, at: Date.now() };
+    this.byId.set(v.sessionId, stamped);
+    this.save();
+    return stamped;
+  }
+
+  getState(): ReviewsResponse {
+    return { verdicts: [...this.byId.values()].sort((a, b) => b.at - a.at) };
+  }
+
+  private save(): void {
+    const verdicts = this.getState().verdicts.slice(0, MAX);
+    try {
+      fs.mkdirSync(path.dirname(FILE), { recursive: true });
+      fs.writeFileSync(FILE + '.tmp', JSON.stringify({ v: 1, verdicts }));
+      fs.renameSync(FILE + '.tmp', FILE);
+    } catch (err) {
+      console.error('[rts-agents] could not save reviews:', err instanceof Error ? err.message : err);
+    }
+  }
+}

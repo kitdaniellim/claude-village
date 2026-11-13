@@ -23,6 +23,8 @@ import type { MoveRequest, MoveStatus, PlaceRequest, RallyRequest } from './comp
 import type { RallySession } from './types/agent';
 import type { BlockedMap, SleepingHero } from './utils/terminalTabs';
 import { BLOCKED_MAX, BLOCKED_NOTE_MAX, isBlockedMap } from './utils/terminalTabs';
+import { isLeader } from './utils/agentLabel';
+import { useReviews } from './hooks/useReviews';
 import RewardsPanel from './components/RewardsPanel';
 import AwardToasts from './components/AwardToasts';
 import MapEditor, {
@@ -36,6 +38,10 @@ import type { LayoutMap } from './components/MapEditor';
 /** A killed session may log one last line; don't let that bring it back. */
 const DISMISS_GRACE_MS = 15_000;
 const MAX_DISMISSED = 40;
+
+function isStringList(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every((x) => typeof x === 'string');
+}
 
 function isDismissedMap(v: unknown): v is Record<string, number> {
   return !!v && typeof v === 'object' && Object.values(v as object).every((n) => typeof n === 'number');
@@ -130,6 +136,21 @@ export default function App() {
     },
     [setBlocked],
   );
+  // Party Leader: which parties it reviews (saved), its verdicts, the review queue, recruit clicks.
+  const [reviewIds, setReviewIds] = usePersistentState<string[]>('party-review', [], isStringList);
+  const leaderAlive = agents.some((a) => a.alive && isLeader(a));
+  const verdicts = useReviews(reviewIds.length > 0 || leaderAlive);
+  const [reviewQueue, setReviewQueue] = useState<string[]>([]);
+  const [leaderRequest, setLeaderRequest] = useState<{ nonce: number } | null>(null);
+  const handleToggleReview = useCallback(
+    (sessionId: string) =>
+      setReviewIds((cur) => (cur.includes(sessionId) ? cur.filter((x) => x !== sessionId) : [...cur, sessionId].slice(-40))),
+    [setReviewIds],
+  );
+  const handleRecruitLeader = useCallback(() => {
+    setLeaderRequest((prev) => ({ nonce: (prev?.nonce ?? 0) + 1 }));
+    setDrawerOpen(true);
+  }, []);
   // The drawer switched terminals on its own (Create Party, Rally, Move): highlight that hero.
   const handleActiveChange = useCallback((id: string | null) => {
     if (id) setSelectedSessionId(id);
@@ -317,6 +338,10 @@ export default function App() {
             onRestartApp={desktop.bridge ? () => desktop.bridge?.restart() : null}
             onDismiss={handleDismiss}
             blocked={blocked}
+            reviewIds={reviewIds}
+            verdicts={verdicts}
+            reviewQueue={reviewQueue}
+            onRecruitLeader={handleRecruitLeader}
           />
         </PanelBoundary>
         {focusActive && toasts}
@@ -390,6 +415,11 @@ export default function App() {
           dismissRequest={dismissRequest}
           blocked={blocked}
           onSetBlocked={handleSetBlocked}
+          reviewIds={reviewIds}
+          verdicts={verdicts}
+          leaderRequest={leaderRequest}
+          onToggleReview={handleToggleReview}
+          onReviewQueue={setReviewQueue}
           onActiveChange={handleActiveChange}
         />
       </main>

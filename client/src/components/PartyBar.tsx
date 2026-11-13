@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject } from 'react';
 import { usePersistentState } from '../hooks/usePersistentState';
-import type { AgentState, AgentStatus, RallySession, SquireInfo } from '../types/agent';
+import type { AgentState, AgentStatus, RallySession, ReviewVerdict, SquireInfo } from '../types/agent';
 import type { Rally } from '../hooks/useRally';
 import RallyCard from './RallyCard';
 import MoveCard from './MoveCard';
@@ -22,6 +22,8 @@ import {
   agentName,
   agentPlaceLabel,
   agentSubtitle,
+  isLeader,
+  LEADER_NAME,
   relTime,
   squireParentName,
 } from '../utils/agentLabel';
@@ -54,6 +56,11 @@ interface PartyBarProps {
   onDismiss?: (sessionId: string) => void;
   /** Sessions marked Blocked (UI only), with their optional note. */
   blocked?: BlockedMap;
+  /** Party Leader: opted-in sessions, its latest verdicts, who's queued / in review, and recruiting. */
+  reviewIds?: string[];
+  verdicts?: ReviewVerdict[];
+  reviewQueue?: string[];
+  onRecruitLeader?: () => void;
 }
 
 /** Saved party order (session ids, `tab:<id>` for launches); prefs values are size-capped. */
@@ -111,6 +118,8 @@ interface CardModel {
 export default function PartyBar(props: PartyBarProps) {
   const { agents, skewMs, selectedSessionId, onSelect, filterRef, onCreateParty, sleepers = [], rally, onRally } = props;
   const { moveStatus = null, onMove, onCancelMove, onRestartApp = null, onDismiss, blocked = {} } = props;
+  const { reviewIds = [], verdicts = [], reviewQueue = [], onRecruitLeader } = props;
+  const hasLeader = agents.some((a) => a.alive && isLeader(a)) || sleepers.some((s) => s.name.trim().toUpperCase() === LEADER_NAME);
   const [now, setNow] = useState(() => Date.now());
   const [filter, setFilter] = useState('');
   const [order, setOrder] = usePersistentState<string[]>('party-order', [], isStringArray);
@@ -351,8 +360,16 @@ export default function PartyBar(props: PartyBarProps) {
                 ⚔ squire of {parentName}
               </span>
             )}
-            {(offline || a.status === 'delegating' || blocked[a.sessionId]) && (
+            {(offline || a.status === 'delegating' || blocked[a.sessionId] || isLeader(a) || reviewIds.includes(a.sessionId)) && (
               <span className="party-badges">
+                {isLeader(a) && (
+                  <span className="party-badge party-badge-leader" title="Party Leader — reviews opted-in parties when they finish a turn">
+                    👑 Party Leader
+                  </span>
+                )}
+                {!isLeader(a) && reviewIds.includes(a.sessionId) && (
+                  <ReviewBadge verdict={verdicts.find((v) => v.sessionId === a.sessionId) ?? null} queued={reviewQueue.includes(a.sessionId)} />
+                )}
                 {blocked[a.sessionId] && <BlockedBadge mark={blocked[a.sessionId] as BlockedMark} />}
                 {offline && (
                   <span className="party-badge party-badge-offline" title="The Claude Code process has exited">
@@ -444,6 +461,18 @@ export default function PartyBar(props: PartyBarProps) {
           <span aria-hidden="true">✦</span> Create Party <span className="party-create-sub">(New Session)</span>
         </button>
       </div>
+      {onRecruitLeader && !hasLeader && (
+        <div className="party-create-row party-leader-row">
+          <button
+            type="button"
+            className="ui-btn party-recruit"
+            onClick={onRecruitLeader}
+            title="Start a PARTY LEADER session that reviews opted-in parties (👑 Review in the drawer) whenever they finish a turn"
+          >
+            👑 Recruit Party Leader
+          </button>
+        </div>
+      )}
       {onMove && onCancelMove && (
         <MoveCard status={moveStatus} onMove={onMove} onCancel={onCancelMove} onRestart={onRestartApp} />
       )}
@@ -499,6 +528,31 @@ export default function PartyBar(props: PartyBarProps) {
 }
 
 /** Placeholder for a hero whose terminal came back after a restart (or a launch not yet adopted). */
+/** Where an opted-in party stands with the Leader; the note shows on hover. */
+function ReviewBadge({ verdict, queued }: { verdict: ReviewVerdict | null; queued: boolean }) {
+  if (queued) {
+    return (
+      <span className="party-badge party-badge-review" title="Waiting for the Party Leader's review">
+        👑 Reviewing…
+      </span>
+    );
+  }
+  if (!verdict) {
+    return (
+      <span className="party-badge party-badge-review" title="The Party Leader reviews this party when it finishes a turn">
+        👑 Review on
+      </span>
+    );
+  }
+  const label =
+    verdict.verdict === 'approved' ? '👑 ✓ Approved' : verdict.verdict === 'changes' ? `👑 Fixing · round ${verdict.round}` : '👑 Needs you';
+  return (
+    <span className={`party-badge party-badge-review party-badge-review-${verdict.verdict}`} title={verdict.note || label}>
+      {label}
+    </span>
+  );
+}
+
 /** Red BLOCKED chip; hovering shows the note (the label is a reminder — nothing else changes). */
 function BlockedBadge({ mark }: { mark: BlockedMark }) {
   return (

@@ -186,7 +186,7 @@ export function launchOptions(
     return { cwd: tab.cwd, resumeSessionId: tab.sessionId, fork: true, name: tab.name };
   }
   if (tab.kind === 'resume' && tab.sessionId) return { cwd: tab.cwd, resumeSessionId: tab.sessionId };
-  return { cwd: tab.cwd, name: NAMELESS };
+  return { cwd: tab.cwd, name: tab.name.trim() || NAMELESS };
 }
 
 /** The command to type by hand when there is no desktop bridge. */

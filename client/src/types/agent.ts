@@ -186,3 +186,18 @@ export interface BuildingInfo {
 
 /** Connection lifecycle for the WebSocket hook. */
 export type ConnectionStatus = 'connecting' | 'online' | 'offline' | 'server-shutdown';
+
+/** A Party Leader's verdict on a worker session (POST /api/review, GET /api/reviews). */
+export interface ReviewVerdict {
+  sessionId: string;
+  verdict: 'approved' | 'changes' | 'needs-you';
+  /** Short note: what to fix, why it's approved, or what the human must decide. */
+  note: string;
+  /** Review round for this worker (1 = first review of the current task). */
+  round: number;
+  at: number;
+}
+
+export interface ReviewsResponse {
+  verdicts: ReviewVerdict[];
+}

@@ -10,6 +10,13 @@ export const FALLBACK_CWD = CODING_ROOT;
 /** Every session the user hasn't /renamed; also the `--name` new sessions launch with. */
 export const NAMELESS = 'Nameless';
 
+/** The reviewer session: whoever carries this /rename name is the Party Leader. */
+export const LEADER_NAME = 'PARTY LEADER';
+
+export function isLeader(a: { customTitle: string | null }): boolean {
+  return a.customTitle?.trim().toUpperCase() === LEADER_NAME;
+}
+
 /** Forked sessions are named "Squire of <parent>" (mirrors the server's SQUIRE_NAME_RE). */
 export const SQUIRE_NAME_RE = /^Squire of (.+)$/;
 
