@@ -781,8 +781,6 @@ export default function TerminalPanel(props: TerminalPanelProps) {
   // ── Party Leader ───────────────────────────────────────────────────────────
   // "Recruit": a fresh session named PARTY LEADER in the coding root.
   const writers = useRef(new Map<string, (data: string) => void>());
-  /** Escalation replies already sent per session (buttons show ✓ and disable). */
-  const [answered, setAnswered] = useState<Record<string, string[]>>({});
   const handledLeaderReq = useRef<{ nonce: number } | null>(null);
   useEffect(() => {
     if (!leaderRequest || handledLeaderReq.current === leaderRequest) return;
@@ -1365,45 +1363,6 @@ export default function TerminalPanel(props: TerminalPanelProps) {
           </button>
         </span>
       </div>
-
-      {/* The Leader escalated this session: its note + the worker's own reply phrases as buttons.
-          A click types the reply into this terminal — it's the user answering, not another session. */}
-      {(() => {
-        if (!active || active.kind !== 'resume' || !active.sessionId) return null;
-        const v = verdicts.find((x) => x.sessionId === active.sessionId);
-        if (!v || v.verdict !== 'needs-you') return null;
-        const write = writers.current.get(active.id);
-        const sent = answered[active.sessionId] ?? [];
-        return (
-          <div className="drawer-escalated" role="status">
-            <span className="drawer-escalated-text" title={v.note}>
-              ⤴ <strong>Leader escalated:</strong> {v.note || 'this needs your decision'}
-            </span>
-            {write && (v.replies ?? []).length > 0 && (
-              <span className="drawer-escalated-replies">
-                {(v.replies ?? []).map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    className="drawer-btn drawer-btn-reply"
-                    disabled={sent.includes(r)}
-                    title={`Type "${r}" into this session and send it`}
-                    onClick={() => {
-                      const sid = active.sessionId as string;
-                      write(r);
-                      window.setTimeout(() => write('\r'), 300);
-                      setAnswered((cur) => ({ ...cur, [sid]: [...(cur[sid] ?? []), r] }));
-                    }}
-                  >
-                    {sent.includes(r) ? '✓ ' : '↵ '}
-                    {r}
-                  </button>
-                ))}
-              </span>
-            )}
-          </div>
-        );
-      })()}
 
       {active && active.elsewherePid !== null && !active.missing && (
         <div className="drawer-warn" role="status">
